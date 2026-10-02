@@ -10,6 +10,7 @@ from cleanup import clean_tool_output, prepare_messages
 from memory_store import load_findings, load_memory, save_turn
 from ollama_client import ask
 from router import prefetch_data, wants_tools
+from help_text import show_help
 from tools.playbook import show_findings
 
 
@@ -25,7 +26,7 @@ def main() -> None:
     print(f"memory turns: {len(remembered)}")
     if findings.get("target"):
         print(f"findings: {findings['target']} ({findings.get('updated', '?')})")
-    print("empty line exits, /clear wipes memory, /findings shows notes")
+    print("empty line exits, /help for commands")
 
     system = (
         "You are a coding assistant. Scan tools print raw reports directly. "
@@ -47,6 +48,9 @@ def main() -> None:
             return
         if not line:
             return
+        if line == "/help":
+            print(show_help())
+            continue
         if line == "/clear":
             config.MEMORY_PATH.unlink(missing_ok=True)
             messages[:] = [messages[0]]
