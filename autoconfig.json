@@ -1,0 +1,12 @@
+{
+  "targets": ["http://127.0.0.1:3000"],
+  "interval_seconds": 1,
+  "run_on_start": true,
+  "compare_after_run": true,
+  "steps": ["profile", "api", "map"],
+  "auth_every_cycles": 12,
+  "auth": {
+    "username": "demo",
+    "password": "demo"
+  }
+}

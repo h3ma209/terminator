@@ -29,6 +29,7 @@ from tools.http import (
     web_base,
 )
 from tools.profile import profile_target
+from tools.xss import check_xss
 
 
 def _collect_snapshot(base: str) -> dict:
@@ -230,9 +231,11 @@ def compare_runs(snapshot_a: str = "", snapshot_b: str = "") -> str:
     if ra != rb:
         lines.append(f"api routes added: {sorted(rb - ra) or 'none'}")
         lines.append(f"api routes removed: {sorted(ra - rb) or 'none'}")
-    if a.get("auth") != b.get("auth"):
-        lines.append(f"auth A: {json.dumps(a.get('auth', {}))}")
-        lines.append(f"auth B: {json.dumps(b.get('auth', {}))}")
+    auth_keys = ("anonymous_profile", "login", "token_ok")
+    auth_a = {k: a.get("auth", {}).get(k) for k in auth_keys}
+    auth_b = {k: b.get("auth", {}).get(k) for k in auth_keys}
+    if auth_a != auth_b:
+        lines.append(f"auth changed: {auth_a} -> {auth_b}")
     if a.get("focus") != b.get("focus"):
         lines.append("focus order changed")
         lines.append(f"  A: {a.get('focus', [])}")
@@ -264,6 +267,7 @@ def run_playbook(target: str) -> str:
         ("profile", profile_target(base)),
         ("api routes", fetch_api_routes(base)),
         ("auth flow", check_auth_flow(base)),
+        ("xss", check_xss(base)),
         ("site map", map_site(base)),
         ("analysis", analyze_target(base)),
     ]

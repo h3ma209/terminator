@@ -189,7 +189,7 @@ def page_notes(body: str, page_url: str) -> list:
 
 
 def paths_to_probe(base: str) -> list[str]:
-    paths = {"/", "/health", "/profile.html", "/api/login", "/api/profile", "/robots.txt"}
+    paths = {"/", "/health", "/profile.html", "/search.html", "/search", "/api/login", "/api/profile", "/robots.txt"}
     sitemap = fetch_text(base + "/sitemap.xml", 1200)
     for match in re.finditer(r"<loc>https?://[^/]+(/[^<]*)</loc>", sitemap, flags=re.I):
         paths.add(match.group(1))
@@ -240,6 +240,9 @@ def score_probe(probe: dict) -> tuple[int, list[str]]:
     if path in {"/profile.html"}:
         score += 65
         reasons.append("user profile page")
+    if path in {"/search", "/search.html"} or "search" in path.lower():
+        score += 70
+        reasons.append("search/input reflection surface")
     if probe.get("has_password"):
         score += 75
         reasons.append("password field")

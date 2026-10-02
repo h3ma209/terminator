@@ -159,4 +159,42 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_xss",
+            "description": "Auto-scan localhost for reflected XSS. Optional custom payload(s), path, param.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string"},
+                    "payload": {"type": "string", "description": "Custom XSS probe string"},
+                    "payloads": {"type": "array", "items": {"type": "string"}},
+                    "path": {"type": "string"},
+                    "param": {"type": "string"},
+                },
+                "required": ["target"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "probe_xss",
+            "description": (
+                "Test one GET param with a payload you craft. "
+                "Use for targeted XSS checks after finding search/forms."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string"},
+                    "path": {"type": "string", "description": "e.g. /search"},
+                    "param": {"type": "string", "description": "e.g. q"},
+                    "payload": {"type": "string", "description": "XSS string to inject verbatim"},
+                },
+                "required": ["target", "path", "param", "payload"],
+            },
+        },
+    },
 ]

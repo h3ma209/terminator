@@ -11,10 +11,10 @@ from tool_calls import calls_from_text
 from tools import HANDLERS, TOOLS
 
 
-def chat(messages: list, use_tools: bool) -> dict:
+def chat(messages: list, use_tools: bool, tools: list | None = None) -> dict:
     payload = {"model": config.MODEL, "messages": prepare_messages(messages), "stream": False}
     if use_tools:
-        payload["tools"] = TOOLS
+        payload["tools"] = tools if tools is not None else TOOLS
     body = json.dumps(payload).encode()
     req = urllib.request.Request(
         f"{config.HOST}/api/chat",
@@ -49,10 +49,10 @@ def run_tools(message: dict) -> list:
     return results
 
 
-def ask(messages: list, use_tools: bool) -> str:
+def ask(messages: list, use_tools: bool, tools: list | None = None) -> str:
     seen = set()
     for _ in range(config.MAX_STEPS):
-        data = chat(messages, use_tools)
+        data = chat(messages, use_tools, tools=tools)
         message = data.get("message") or {}
         calls = message.get("tool_calls") or calls_from_text(message.get("content") or "")
         if not calls:

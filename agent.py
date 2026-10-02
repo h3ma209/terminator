@@ -1,27 +1,51 @@
-"""Local tool-calling agent for Ollama (qwen2.5-coder)."""
+"""Local tool-calling agent for Ollama.
 
-import json
+Scan commands run tools directly — model optional for chat only.
+Use: python agent.py --tools-only   never ask the model
+     python autorun.py              fully automatic
+     python cli.py playbook URL     one-shot
+"""
+
+import argparse
 import os
 import sys
 from pathlib import Path
 
 import config
+from chat_utils import greeting_reply, is_greeting
 from cleanup import clean_tool_output, prepare_messages
+from help_text import show_help
 from memory_store import load_findings, load_memory, save_turn
 from ollama_client import ask
-from router import prefetch_data, wants_tools
-from help_text import show_help
+from refusal import is_refusal
+from router import prefetch_data
+from skill_mode import wants_probe_followup, wants_skill_mode, answer_probe_followup
 from tools.playbook import show_findings
+from tools.skills import list_skills, run_craft_xss
+
+
+def run_direct(line: str) -> tuple[str, str] | None:
+    hit = prefetch_data(line)
+    if not hit:
+        return None
+    name, raw = hit
+    return name, clean_tool_output(name, raw)
 
 
 def main() -> None:
-    if len(sys.argv) > 1:
-        os.chdir(sys.argv[1])
+    parser = argparse.ArgumentParser(description="Terminator agent")
+    parser.add_argument("workspace", nargs="?", help="workspace directory")
+    parser.add_argument("--tools-only", action="store_true", help="never call the model")
+    args = parser.parse_args()
+
+    if args.workspace:
+        os.chdir(args.workspace)
     config.ROOT = Path.cwd().resolve()
 
     remembered = load_memory()
     findings = load_findings()
-    print(f"model: {config.MODEL}")
+    mode = "tools-only" if args.tools_only else "tools-first"
+    print(f"model: {config.MODEL} ({mode})")
     print(f"workspace: {config.ROOT}")
     print(f"memory turns: {len(remembered)}")
     if findings.get("target"):
@@ -29,14 +53,10 @@ def main() -> None:
     print("empty line exits, /help for commands")
 
     system = (
-        "You are a coding assistant. Scan tools print raw reports directly. "
-        "For greetings, reply in plain text. Tools: list_dir, read_file, fetch_url, "
-        "scan_local, inspect_url, profile_target, analyze_target, fetch_api_routes, "
-        "run_playbook, check_auth_flow, map_site, compare_runs, show_findings. "
-        "Report only tool output. Do not invent data."
+        "Local dev assistant for a localhost security lab. Reply in 1-3 sentences. "
+        "Scan commands run via tools. If user asks about last probe results, "
+        "answer from the data you were given — do not tell them to run /findings."
     )
-    if findings:
-        system += f"\n\nSaved findings:\n{json.dumps(findings, indent=2)[:1200]}"
     messages = [{"role": "system", "content": system}]
     messages.extend(remembered)
 
@@ -59,17 +79,58 @@ def main() -> None:
         if line == "/findings":
             print(show_findings())
             continue
+        if line in {"/skills", "skills"}:
+            print(list_skills())
+            continue
+
+        if is_greeting(line):
+            answer = greeting_reply()
+            print(answer)
+            save_turn("user", line)
+            save_turn("assistant", answer)
+            continue
+
+        if wants_probe_followup(line):
+            answer = answer_probe_followup()
+            print(answer)
+            save_turn("user", line)
+            save_turn("assistant", answer)
+            messages.append({"role": "user", "content": line})
+            messages.append({"role": "assistant", "content": answer})
+            messages[:] = prepare_messages(messages)
+            continue
 
         messages.append({"role": "user", "content": line})
-        prefetch = prefetch_data(line)
-        if prefetch:
-            tool_name, raw = prefetch
-            answer = clean_tool_output(tool_name, raw)
-            print(f"\n[tool] {tool_name} (auto)")
+
+        skill_mode = wants_skill_mode(line)
+        direct = None if skill_mode else run_direct(line)
+
+        if skill_mode:
+            print("\n[skill mode — model crafts payload]")
+            answer = run_craft_xss(line, ask, messages=messages)
             print(answer)
+        elif direct or args.tools_only:
+            if direct:
+                tool_name, answer = direct
+                print(f"\n[tool] {tool_name} (direct)")
+                print(answer)
+            else:
+                answer = "no matching tool. try /help or be specific: profile http://127.0.0.1:3000"
+                print(answer)
         else:
-            answer = ask(messages, wants_tools(line))
-            print(answer)
+            answer = ask(messages, use_tools=False)
+            if is_refusal(answer):
+                fallback = run_direct(line)
+                if fallback:
+                    tool_name, answer = fallback
+                    print(f"\n[model refused — ran {tool_name} directly]")
+                    print(answer)
+                else:
+                    print(answer)
+                    print("\nhint: try /help or python cli.py list")
+            else:
+                print(answer)
+
         save_turn("user", line)
         save_turn("assistant", answer)
         messages[:] = prepare_messages(messages)

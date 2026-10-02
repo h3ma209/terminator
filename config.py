@@ -3,7 +3,9 @@
 from pathlib import Path
 
 HOST = __import__("os").environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
-MODEL = __import__("os").environ.get("OLLAMA_MODEL", "qwen2.5-coder:7b")
+MODEL = __import__("os").environ.get(
+    "OLLAMA_MODEL", "thirdeyeai/Qwen2.5-Coder-7B-Instruct-Uncensored:Q4_0"
+)
 MAX_STEPS = 8
 MAX_READ = 32_000
 MEMORY_TURNS = 12
@@ -21,7 +23,8 @@ REPORTS_DIR = AGENT_DIR / "reports"
 
 AUTO_TOOLS = frozenset({
     "profile_target", "analyze_target", "fetch_api_routes",
-    "run_playbook", "check_auth_flow", "map_site", "compare_runs", "show_findings",
+    "run_playbook", "check_auth_flow", "check_login_apis", "map_site",
+    "compare_runs", "show_findings", "check_xss", "probe_xss", "list_skills", "run_skill",
 })
 
 SKIP_DIRS = frozenset({"__pycache__", ".git", ".venv", "venv"})
