@@ -11,10 +11,9 @@ from tools.playbook import (
 )
 from tools.profile import profile_target
 from tools.schemas import TOOLS
+from tools.skills import SKILL_DEFS, list_skills, run_skill, run_skill_battery
 from tools.web import fetch_url, inspect_url, scan_local
 from tools.workspace import list_dir, read_file
-from tools.skills import list_skills, run_skill
-from tools.xss import check_xss, probe_xss
 
 HANDLERS = {
     "list_dir": list_dir,
@@ -30,10 +29,20 @@ HANDLERS = {
     "map_site": map_site,
     "compare_runs": compare_runs,
     "show_findings": show_findings,
-    "check_xss": check_xss,
-    "probe_xss": probe_xss,
     "list_skills": list_skills,
     "run_skill": run_skill,
+    "run_skill_battery": run_skill_battery,
 }
+
+
+def _run_autonomous_engagement(*args, **kwargs):
+    from autonomous import run_autonomous_engagement
+    return run_autonomous_engagement(*args, **kwargs)
+
+
+HANDLERS["run_autonomous_engagement"] = _run_autonomous_engagement
+
+for _name, _spec in SKILL_DEFS.items():
+    HANDLERS[_name] = _spec["handler"]
 
 __all__ = ["HANDLERS", "TOOLS"]

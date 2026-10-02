@@ -1,16 +1,15 @@
-"""Fully autonomous scan loop — no chat, no prompts.
+"""Fully autonomous pentest loop — no chat, no model.
 
-Passive scans by default. Auth login test runs only on schedule.
+Thinks like a pentester: recon -> plan skills -> execute -> report.
 
-  python autorun.py              loop forever
-  python autorun.py --once       single cycle
+  python autorun.py              loop forever (autonomous mode)
+  python autorun.py --once       single engagement
   python autorun.py --interval 300
-  python autorun.py --full       include auth + full analyze each cycle
+  python autorun.py --legacy     old step-based scans only
 """
 
 import argparse
 import json
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -18,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import config
+from autonomous import run_autonomous_engagement
 from memory_store import list_snapshots, load_findings, save_findings, save_snapshot
 from tools.analyze import analyze_target
 from tools.api_routes import fetch_api_routes
@@ -34,9 +34,11 @@ DEFAULT_CONFIG = {
     "interval_seconds": 3600,
     "run_on_start": True,
     "compare_after_run": True,
-    "steps": ["profile", "api", "map"],
-    "auth_every_cycles": 12,
+    "mode": "autonomous",
+    "auth_every_cycles": 1,
+    "deep_analyze_every": 6,
     "auth": {"username": "demo", "password": "demo"},
+    "steps": ["profile", "api", "map"],
 }
 
 
@@ -52,7 +54,10 @@ def load_autoconfig() -> dict:
         AUTOCONFIG_PATH.write_text(json.dumps(DEFAULT_CONFIG, indent=2) + "\n", encoding="utf-8")
         log(f"created default config: {AUTOCONFIG_PATH}")
     data = json.loads(AUTOCONFIG_PATH.read_text(encoding="utf-8"))
-    return {**DEFAULT_CONFIG, **data}
+    merged = {**DEFAULT_CONFIG, **data}
+    if merged.get("interval_seconds", 3600) < MIN_INTERVAL:
+        merged["interval_seconds"] = MIN_INTERVAL
+    return merged
 
 
 def target_up(target: str) -> bool:
@@ -72,7 +77,7 @@ def target_up(target: str) -> bool:
             return False
 
 
-def run_autorun_scan(target: str, cfg: dict, cycle: int, full: bool) -> str:
+def run_legacy_scan(target: str, cfg: dict, cycle: int, full: bool) -> str:
     base, err = web_base(target)
     if not base:
         return err
@@ -89,7 +94,7 @@ def run_autorun_scan(target: str, cfg: dict, cycle: int, full: bool) -> str:
             steps = [s for s in steps if s != "auth"]
 
     auth_cfg = cfg.get("auth", {})
-    lines = [f"target: {base}", f"cycle: {cycle}", f"steps: {', '.join(steps)}", ""]
+    lines = [f"target: {base}", f"cycle: {cycle}", f"mode: legacy", f"steps: {', '.join(steps)}", ""]
     for step in steps:
         log(f"  {step}")
         if step == "profile":
@@ -117,72 +122,86 @@ def run_autorun_scan(target: str, cfg: dict, cycle: int, full: bool) -> str:
         "target": base,
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "last_snapshot": str(snap_path),
-        "open_ports": snapshot["open_ports"],
-        "missing_headers": snapshot["missing_headers"],
-        "api_routes": snapshot["api_routes"],
-        "focus": snapshot["focus"],
     })
-    lines.insert(3, f"snapshot: {snap_path}")
+    lines.insert(4, f"snapshot: {snap_path}")
     return "\n".join(lines).strip()
+
+
+def run_cycle(cfg: dict, cycle: int, legacy: bool) -> None:
+    global _busy
+    if _busy:
+        log("skip cycle — previous engagement still running")
+        return
+    _busy = True
+    try:
+        mode = "legacy" if legacy else "autonomous"
+        log(f"cycle {cycle} start ({mode}) — {len(cfg['targets'])} target(s)")
+        before = len(list_snapshots())
+
+        for target in cfg["targets"]:
+            if not target_up(target):
+                continue
+            log(f"engage {target}")
+            try:
+                if legacy:
+                    report = run_legacy_scan(target, cfg, cycle, full=False)
+                else:
+                    auth_every = cfg.get("auth_every_cycles", 1)
+                    include_auth = not auth_every or cycle % auth_every == 0 or cycle == 1
+                    report = run_autonomous_engagement(
+                        target,
+                        cycle=cycle,
+                        include_auth=include_auth,
+                        auth=cfg.get("auth", {}),
+                        log_fn=log,
+                    )
+                config.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+                (config.REPORTS_DIR / "latest.txt").write_text(report, encoding="utf-8")
+                summary_path = config.REPORTS_DIR / "engagement-summary.txt"
+                summary = report.split("=== RAW OUTPUT ===")[0].strip()
+                summary_path.write_text(summary, encoding="utf-8")
+
+                engagement = load_findings().get("engagement", {})
+                vuln_count = engagement.get("vuln_count", 0)
+                log(f"done {target} — {vuln_count} finding(s)")
+            except Exception as exc:
+                log(f"error {target}: {exc}")
+
+        if cfg.get("compare_after_run") and len(list_snapshots()) >= 2 and len(list_snapshots()) > before:
+            diff = compare_runs()
+            if "no differences" not in diff:
+                log("changes since last run:")
+                for line in diff.splitlines():
+                    if line.strip():
+                        log(f"  {line}")
+    finally:
+        _busy = False
 
 
 _busy = False
 
 
-def run_cycle(cfg: dict, cycle: int, full: bool) -> None:
-    global _busy
-    if _busy:
-        log("skip cycle — previous scan still running")
-        return
-    _busy = True
-    try:
-        log(f"cycle {cycle} start — {len(cfg['targets'])} target(s)")
-        before = len(list_snapshots())
-        for target in cfg["targets"]:
-            if not target_up(target):
-                continue
-            log(f"scan {target}")
-            try:
-                report = run_autorun_scan(target, cfg, cycle, full)
-                config.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-                (config.REPORTS_DIR / "latest.txt").write_text(report, encoding="utf-8")
-                log(f"done {target}")
-            except Exception as exc:
-                log(f"error {target}: {exc}")
-        if cfg.get("compare_after_run") and len(list_snapshots()) >= 2 and len(list_snapshots()) > before:
-            diff = compare_runs()
-            if "no differences" not in diff:
-                log("real changes since last run:")
-                for line in diff.splitlines():
-                    if line.strip():
-                        log(f"  {line}")
-            else:
-                log("no real changes")
-    finally:
-        _busy = False
-
-
 def main() -> int:
     config.ROOT = Path.cwd().resolve()
-    parser = argparse.ArgumentParser(description="Autonomous terminator scan loop.")
+    parser = argparse.ArgumentParser(description="Autonomous pentest loop.")
     parser.add_argument("--once", action="store_true", help="run one cycle and exit")
-    parser.add_argument("--full", action="store_true", help="auth + analyze every cycle")
+    parser.add_argument("--legacy", action="store_true", help="old passive step scans only")
     parser.add_argument("--interval", type=int, help="seconds between cycles")
     args = parser.parse_args()
 
     cfg = load_autoconfig()
     interval = args.interval or cfg.get("interval_seconds", 3600)
-    if interval < MIN_INTERVAL:
-        log(f"interval {interval}s too low — using {MIN_INTERVAL}s minimum")
-        interval = MIN_INTERVAL
+    legacy = args.legacy or cfg.get("mode") == "legacy"
 
-    log(f"autorun started — interval {interval}s — passive steps: {cfg.get('steps')}")
-    if not args.full:
-        log(f"auth test every {cfg.get('auth_every_cycles', 12)} cycles (use --full to test each cycle)")
+    if legacy:
+        log(f"autorun legacy — interval {interval}s — steps: {cfg.get('steps')}")
+    else:
+        log(f"autorun autonomous — interval {interval}s — adaptive attacks")
+        log("workflow: recon -> multi-technique attacks -> escalate -> chain auth -> report")
 
     cycle = 1
     if cfg.get("run_on_start", True) or args.once:
-        run_cycle(cfg, cycle, args.full)
+        run_cycle(cfg, cycle, legacy)
     if args.once:
         log("autorun finished (--once)")
         return 0
@@ -191,7 +210,7 @@ def main() -> int:
         log(f"sleep {interval}s")
         time.sleep(interval)
         cycle += 1
-        run_cycle(cfg, cycle, args.full)
+        run_cycle(cfg, cycle, legacy)
 
 
 if __name__ == "__main__":

@@ -6,65 +6,51 @@ def show_help() -> str:
 
 COMMANDS
   /help       show this help
-  /skills     list agent skills + params (model can craft values)
-  /findings   show saved session intel (findings.json)
-  /clear      wipe chat memory (memory.jsonl)
-  (empty line) exit
+  /skills     list all probe + check skills
+  /findings   show saved session intel
+  /clear      wipe chat memory
 
-AUTO-RUN (prints raw tool output, no model rewrite)
-  run playbook on http://127.0.0.1:3000   full scan pipeline + snapshot
-  profile http://127.0.0.1:3000           ports, headers, robots.txt, sitemap
-  analyze http://127.0.0.1:3000           merge scans + priority targets
-  fetch api routes on http://127.0.0.1:3000   discover API endpoints
-  check auth flow on http://127.0.0.1:3000    login + JWT test (demo/demo)
-  map site http://127.0.0.1:3000          crawl pages from sitemap/links
-  check xss on http://127.0.0.1:3000      auto XSS scan (fixed payloads)
-  craft xss payload for /search           skill mode — Qwen picks payload, runs probe_xss
-  compare runs                            diff last two snapshots
-  inspect http://127.0.0.1:3000           passive URL security review
-  scan http://127.0.0.1:3000              localhost header check
+AUTO-RUN (direct tool output)
+  run playbook on http://127.0.0.1:3000   full pipeline + skill battery
+  run skill battery on http://127.0.0.1:3000   all skill checks
+  check xss / sqli / ssrf / cors / idor / jwt bypass / ...
+  check passive suite on http://127.0.0.1:3000
+  craft sqli payload for /user            skill mode (Qwen crafts payload)
 
-TOOLS (model can call these on other prompts)
-  list_dir / read_file    workspace files
-  fetch_url               GET any http/https URL
-  scan_local              header check (localhost only)
-  inspect_url             headers, cookies, TLS, forms (any URL)
-  profile_target          full localhost profile
-  analyze_target          merged intel + focus ranking
-  fetch_api_routes        probe API paths
-  run_playbook            all of the above in one run
-  check_auth_flow         JWT login flow test
-  map_site                site structure map
-  check_xss               auto XSS scan; optional payload/path/param args
-  probe_xss               one param + model-crafted payload
-  list_skills             skill catalog with param docs
-  compare_runs            snapshot diff
-  show_findings           structured session notes
+SKILL GROUPS (probe_* + check_*)
+  xss, sqli, redirect, traversal          injection / redirect labs
+  jwt, idor, mass_assignment, rate_limit  auth labs
+  cors, ssrf, crlf                        network labs
+  cmdi, ssti                              injection labs
+  csrf, security_headers, sensitive_leak, clickjacking, http_methods  passive
 
-AUTOMATE (no chat, no model)
-  python cli.py playbook http://127.0.0.1:3000     one-shot manual
+CYBORG LAB ENDPOINTS
+  /search?q=  /user?id=  /redirect?url=  /files?name=
+  /fetch?url=  /ping?host=  /render?template=  /echo?msg=
+  /api/login  /api/profile  /api/admin  /api/cors
 
-FULL AUTO (runs alone on a timer)
-  python autorun.py              passive loop (profile, api, map)
-  python autorun.py --once       one cycle then exit
-  python autorun.py --full       include auth + analyze every cycle
+CLI
+  python cli.py battery http://127.0.0.1:3000
+  python cli.py jwt
+  python cli.py probe --skill sqli --payload "' OR '1'='1"
+  python cli.py list
 
-  autoconfig.json:
-    interval_seconds   min 60 (default 3600)
-    steps              profile, api, map (passive)
-    auth_every_cycles  login test every N cycles (default 12)
+AUTONOMOUS (no chat, no model — pentester brain)
+  python autorun.py              recon -> plan skills -> execute -> report
+  python autorun.py --once       one full engagement
+  python autorun.py --legacy     old passive-only mode
 
-  Logs: autorun.log | Latest: reports/latest.txt
-
-  Start at Windows login (Task Scheduler):
-    python E:\\terminator\\autorun.py
+  Adaptive — not a fixed skill script:
+    1. recon + discover forms/params from HTML
+    2. multiple techniques per vuln (XSS: script, img, svg… SQLi: quote, OR, union…)
+    3. stops category when confirmed, escalates on partial signals
+    4. auth chains: jwt none variants, mass assignment bodies, token follow-up
+    5. rotates starting technique each cycle
+    reports/engagement-summary.txt lists WHICH technique worked
 
 MODES
-  python agent.py              tools-first (model only for chat)
-  python agent.py --tools-only never call model — no refusals
-  python autorun.py            fully automatic on timer
-  python cli.py list           one-shot commands
-
-NOTES
-  Default model: thirdeyeai/Qwen2.5-Coder-7B-Instruct-Uncensored:Q4_0
-  Override: set OLLAMA_MODEL=... | Use --tools-only to skip model entirely"""
+  python agent.py              tools-first chat
+  python agent.py --tools-only never call model
+  python autorun.py            fully autonomous pentest loop
+  python cli.py autonomous     one-shot autonomous engagement
+  python cli.py <cmd>          one-shot skill"""

@@ -21,7 +21,7 @@ from refusal import is_refusal
 from router import prefetch_data
 from skill_mode import wants_probe_followup, wants_skill_mode, answer_probe_followup
 from tools.playbook import show_findings
-from tools.skills import list_skills, run_craft_xss
+from tools.skills import list_skills, run_craft_skill
 
 
 def run_direct(line: str) -> tuple[str, str] | None:
@@ -107,7 +107,7 @@ def main() -> None:
 
         if skill_mode:
             print("\n[skill mode — model crafts payload]")
-            answer = run_craft_xss(line, ask, messages=messages)
+            answer = run_craft_skill(line, ask, messages=messages)
             print(answer)
         elif direct or args.tools_only:
             if direct:

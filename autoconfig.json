@@ -3,8 +3,9 @@
   "interval_seconds": 1,
   "run_on_start": true,
   "compare_after_run": true,
-  "steps": ["profile", "api", "map"],
-  "auth_every_cycles": 12,
+  "mode": "autonomous",
+  "auth_every_cycles": 1,
+  "deep_analyze_every": 6,
   "auth": {
     "username": "demo",
     "password": "demo"

@@ -29,6 +29,7 @@ from tools.http import (
     web_base,
 )
 from tools.profile import profile_target
+from tools.skills import run_skill_battery
 from tools.xss import check_xss
 
 
@@ -267,7 +268,7 @@ def run_playbook(target: str) -> str:
         ("profile", profile_target(base)),
         ("api routes", fetch_api_routes(base)),
         ("auth flow", check_auth_flow(base)),
-        ("xss", check_xss(base)),
+        ("skill battery", run_skill_battery(base)),
         ("site map", map_site(base)),
         ("analysis", analyze_target(base)),
     ]

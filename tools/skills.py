@@ -1,125 +1,181 @@
 """Skill registry — model supplies params, handler runs probe."""
 
+from skill_mode import SKILL_TYPES, build_skill_prompt, detect_skill_type, extract_payload, parse_skill_hints
+from tools.auth_skills import (
+    check_auth_bypass,
+    check_idor,
+    check_rate_limit,
+    probe_idor,
+    probe_jwt,
+    probe_mass_assignment,
+)
+from tools.injection_skills import check_cmdi, check_ssti, probe_cmdi, probe_ssti
+from tools.network_skills import check_cors, check_crlf, check_ssrf, probe_cors, probe_crlf, probe_ssrf
+from tools.passive_skills import (
+    check_clickjacking,
+    check_csrf,
+    check_http_methods,
+    check_security_headers,
+    check_sensitive_leak,
+    run_passive_suite,
+)
+from tools.redirect import check_redirect, probe_redirect
+from tools.sqli import check_sqli, probe_sqli
+from tools.traversal import check_traversal, probe_traversal
 from tools.xss import check_xss, probe_xss
 
-# name -> (handler, ollama schema fragment)
-SKILL_DEFS = {
-    "probe_xss": {
-        "description": (
-            "Test one GET param for reflected XSS using a payload you craft. "
-            "Use after finding a form/search endpoint. "
-            "Craft context-aware payloads (e.g. <script>alert(1)</script>, "
-            "\"><svg/onload=alert(1)>, javascript: URLs)."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "target": {"type": "string", "description": "Base URL e.g. http://127.0.0.1:3000"},
-                "path": {"type": "string", "description": "Path e.g. /search"},
-                "param": {"type": "string", "description": "Query param name e.g. q"},
-                "payload": {
-                    "type": "string",
-                    "description": "XSS probe string you crafted; injected verbatim into the param",
-                },
-            },
-            "required": ["target", "path", "param", "payload"],
+
+def _probe_schema(desc: str, path_hint: str, param_hint: str, payload_hint: str) -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "target": {"type": "string"},
+            "path": {"type": "string", "description": path_hint},
+            "param": {"type": "string", "description": param_hint},
+            "payload": {"type": "string", "description": payload_hint},
         },
-        "handler": probe_xss,
-    },
-    "check_xss": {
-        "description": (
-            "Auto-scan localhost for reflected XSS on GET forms and search params. "
-            "Optional: pass custom payload(s) to use instead of defaults."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "target": {"type": "string"},
-                "payload": {"type": "string", "description": "Custom XSS probe for all discovered params"},
-                "payloads": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Multiple payloads to try per param",
-                },
-                "path": {"type": "string", "description": "Limit scan to one path e.g. /search"},
-                "param": {"type": "string", "description": "Limit scan to one param e.g. q"},
-            },
-            "required": ["target"],
-        },
-        "handler": check_xss,
-    },
-}
+        "required": ["target", "path", "param", "payload"],
+    }
+
+
+def _check_schema(desc: str, extra: bool = True) -> dict:
+    props = {"target": {"type": "string"}}
+    if extra:
+        props.update({
+            "payload": {"type": "string"},
+            "path": {"type": "string"},
+            "param": {"type": "string"},
+        })
+    return {"type": "object", "properties": props, "required": ["target"]}
+
+
+def _target_schema(desc: str) -> dict:
+    return {"type": "object", "properties": {"target": {"type": "string"}}, "required": ["target"]}
+
+
+PROBE_ENTRIES = [
+    ("probe_xss", "xss", probe_xss, "Reflected XSS probe.", "/search", "q", "XSS payload"),
+    ("probe_sqli", "sqli", probe_sqli, "SQLi probe.", "/user", "id", "SQLi payload"),
+    ("probe_redirect", "redirect", probe_redirect, "Open redirect probe.", "/redirect", "url", "External URL"),
+    ("probe_traversal", "traversal", probe_traversal, "Path traversal probe.", "/files", "name", "Traversal path"),
+    ("probe_jwt", "jwt", probe_jwt, "JWT/auth bypass probe.", "/api/admin", "Authorization", "JWT token"),
+    ("probe_idor", "idor", probe_idor, "IDOR probe.", "/user", "id", "Object id"),
+    ("probe_mass_assignment", "mass_assignment", probe_mass_assignment, "Mass assignment on login.", "/api/login", "body", "JSON body"),
+    ("probe_cors", "cors", probe_cors, "CORS misconfiguration probe.", "/api/cors", "Origin", "Origin URL"),
+    ("probe_ssrf", "ssrf", probe_ssrf, "SSRF probe.", "/fetch", "url", "URL to fetch"),
+    ("probe_cmdi", "cmdi", probe_cmdi, "Command injection probe.", "/ping", "host", "Shell payload"),
+    ("probe_ssti", "ssti", probe_ssti, "SSTI probe.", "/render", "template", "Template payload"),
+    ("probe_crlf", "crlf", probe_crlf, "CRLF/header injection probe.", "/echo", "msg", "CRLF payload"),
+]
+
+CHECK_ENTRIES = [
+    ("check_xss", "xss", check_xss, "Auto-scan reflected XSS."),
+    ("check_sqli", "sqli", check_sqli, "Auto-scan SQLi."),
+    ("check_redirect", "redirect", check_redirect, "Auto-scan open redirects."),
+    ("check_traversal", "traversal", check_traversal, "Auto-scan path traversal."),
+    ("check_auth_bypass", "jwt", check_auth_bypass, "JWT none-token + mass assignment battery."),
+    ("check_idor", "idor", check_idor, "Auto-scan IDOR on /user."),
+    ("check_cors", "cors", check_cors, "Auto-scan CORS."),
+    ("check_ssrf", "ssrf", check_ssrf, "Auto-scan SSRF on /fetch."),
+    ("check_cmdi", "cmdi", check_cmdi, "Auto-scan command injection."),
+    ("check_ssti", "ssti", check_ssti, "Auto-scan SSTI."),
+    ("check_crlf", "crlf", check_crlf, "Auto-scan CRLF injection."),
+    ("check_rate_limit", "jwt", check_rate_limit, "Login rate limit check."),
+    ("check_csrf", "passive", check_csrf, "Find forms missing CSRF tokens."),
+    ("check_security_headers", "passive", check_security_headers, "Security header score."),
+    ("check_sensitive_leak", "passive", check_sensitive_leak, "Scan for secrets in responses."),
+    ("check_clickjacking", "passive", check_clickjacking, "X-Frame-Options / CSP check."),
+    ("check_http_methods", "passive", check_http_methods, "Risky HTTP methods on API routes."),
+    ("run_passive_suite", "passive", run_passive_suite, "All passive checks."),
+]
+
+SKILL_DEFS = {}
+PROBE_HANDLERS = {}
+
+for name, skill, handler, desc, path, param, payload in PROBE_ENTRIES:
+    SKILL_DEFS[name] = {
+        "description": desc,
+        "parameters": _probe_schema(desc, path, param, payload),
+        "handler": handler,
+        "skill": skill,
+    }
+    PROBE_HANDLERS[name] = handler
+
+for name, skill, handler, desc in CHECK_ENTRIES:
+    schema = _target_schema(desc) if name in {
+        "check_rate_limit", "check_csrf", "check_security_headers",
+        "check_sensitive_leak", "check_clickjacking", "check_http_methods",
+        "run_passive_suite", "check_auth_bypass", "check_cors",
+    } else _check_schema(desc)
+    SKILL_DEFS[name] = {"description": desc, "parameters": schema, "handler": handler, "skill": skill}
 
 
 def skill_tool_schemas() -> list:
     return [
-        {
-            "type": "function",
-            "function": {"name": name, **{k: v for k, v in spec.items() if k != "handler"}},
-        }
-        for name, spec in SKILL_DEFS.items()
+        {"type": "function", "function": {"name": n, **{k: v for k, v in s.items() if k not in {"handler", "skill"}}}}
+        for n, s in SKILL_DEFS.items()
     ]
 
 
-def probe_only_schemas() -> list:
-    spec = SKILL_DEFS["probe_xss"]
+def probe_schemas_for(skill: str) -> list:
     return [
-        {
-            "type": "function",
-            "function": {"name": "probe_xss", **{k: v for k, v in spec.items() if k != "handler"}},
-        }
+        {"type": "function", "function": {"name": n, **{k: v for k, v in SKILL_DEFS[n].items() if k not in {"handler", "skill"}}}}
+        for n, s in SKILL_DEFS.items() if s.get("skill") == skill and n.startswith("probe_")
     ]
 
 
 def _probe_ok(hints: dict) -> bool:
     from memory_store import load_findings
 
+    cfg = SKILL_TYPES.get(hints["skill"], {})
     probe = load_findings().get("last_probe") or {}
-    want_path = (hints.get("path") or "/search").rstrip("/") or "/search"
-    got_path = (probe.get("path") or "").rstrip("/")
-    return bool(probe) and got_path == want_path and probe.get("skill") == "probe_xss"
+    if not probe or probe.get("skill") != cfg.get("probe_tool"):
+        return False
+    want = (hints.get("path") or "").rstrip("/")
+    got = (probe.get("path") or "").rstrip("/")
+    if want and got and want != got:
+        return False
+    return True
 
 
-def run_craft_xss(user_line: str, ask_fn, messages: list | None = None) -> str:
-    """Model crafts payload; agent enforces path/target and fixes bad tool calls."""
-    from skill_mode import SEARCH_DEFAULTS, build_skill_prompt, extract_payload, parse_skill_hints
-    from tools.xss import probe_xss
-
-    hints = parse_skill_hints(user_line)
-    path = hints.get("path") or SEARCH_DEFAULTS["path"]
-    param = hints.get("param") or SEARCH_DEFAULTS["param"]
-    target = hints["target"]
+def run_craft_skill(user_line: str, ask_fn, messages: list | None = None) -> str:
+    skill = detect_skill_type(user_line)
+    cfg = SKILL_TYPES[skill]
+    hints = parse_skill_hints(user_line, skill)
+    path, param, target = hints["path"], hints["param"], hints["target"]
+    tool_name = cfg["probe_tool"]
+    handler = PROBE_HANDLERS[tool_name]
 
     work = [
-        {"role": "system", "content": build_skill_prompt(user_line)},
+        {"role": "system", "content": build_skill_prompt(user_line, skill)},
         {"role": "user", "content": user_line},
     ]
-    answer = ask_fn(work, use_tools=True, tools=probe_only_schemas())
+    answer = ask_fn(work, use_tools=True, tools=probe_schemas_for(skill))
     if messages is not None:
         messages.extend(work[2:])
 
     if _probe_ok(hints):
         return answer
 
-    payload = extract_payload(answer) or "<script>alert(1)</script>"
-    print(f"\n[skill fix — model missed {path}?{param}=, running probe_xss directly]")
-    result = probe_xss(target, path, param, payload)
-    verdict = "Yes — vulnerable." if "vulnerable: True" in result else "No — not vulnerable."
-    if answer.strip() and "<tool>" not in answer:
-        return f"{result}\n\n{verdict}\n{answer.strip()}"
-    return f"{result}\n\n{verdict}"
+    payload = extract_payload(answer, skill) or cfg["fallback_payload"]
+    print(f"\n[skill fix — running {tool_name}]")
+    result = handler(target, path, param, payload)
+    verdict = "Yes - vulnerable." if "vulnerable: True" in result else "No - not vulnerable."
+    return f"{result}\n\n{verdict}" if "<tool>" in (answer or "") else f"{result}\n\n{verdict}\n{answer.strip()}" if answer.strip() else f"{result}\n\n{verdict}"
+
+
+run_craft_xss = run_craft_skill
 
 
 def list_skills() -> str:
-    lines = ["=== agent skills ===", "Model crafts params; tool executes on localhost.", ""]
+    lines = ["=== agent skills ===", "Model crafts payload; tool executes on localhost.", ""]
+    groups: dict[str, list] = {}
     for name, spec in SKILL_DEFS.items():
-        lines.append(f"  {name}")
-        lines.append(f"    {spec['description']}")
-        props = spec["parameters"].get("properties", {})
-        req = spec["parameters"].get("required", [])
-        for pname, pdef in props.items():
-            mark = " (required)" if pname in req else ""
-            lines.append(f"    - {pname}{mark}: {pdef.get('description', pdef.get('type', ''))}")
+        groups.setdefault(spec.get("skill", "?"), []).append((name, spec))
+    for skill in sorted(groups):
+        lines.append(f"[{skill}]")
+        for name, spec in groups[skill]:
+            lines.append(f"  {name} — {spec['description']}")
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -127,7 +183,16 @@ def list_skills() -> str:
 def run_skill(name: str, **kwargs) -> str:
     spec = SKILL_DEFS.get(name)
     if not spec:
-        known = ", ".join(sorted(SKILL_DEFS))
-        return f"unknown skill: {name}. known: {known}"
-    handler = spec["handler"]
-    return handler(**kwargs)
+        return f"unknown skill: {name}. known: {', '.join(sorted(SKILL_DEFS))}"
+    return spec["handler"](**kwargs)
+
+
+def run_skill_battery(target: str) -> str:
+    checks = (
+        "check_xss", "check_sqli", "check_redirect", "check_traversal",
+        "check_auth_bypass", "check_idor", "check_cors", "check_ssrf",
+        "check_cmdi", "check_ssti", "check_crlf", "check_rate_limit",
+        "run_passive_suite",
+    )
+    parts = [run_skill(name, target=target) for name in checks]
+    return "\n\n".join(parts)

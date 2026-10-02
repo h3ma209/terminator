@@ -189,7 +189,11 @@ def page_notes(body: str, page_url: str) -> list:
 
 
 def paths_to_probe(base: str) -> list[str]:
-    paths = {"/", "/health", "/profile.html", "/search.html", "/search", "/api/login", "/api/profile", "/robots.txt"}
+    paths = {
+        "/", "/health", "/profile.html", "/search.html", "/search",
+        "/user", "/redirect", "/files", "/fetch", "/ping", "/render", "/echo",
+        "/api/login", "/api/profile", "/api/admin", "/api/cors", "/robots.txt",
+    }
     sitemap = fetch_text(base + "/sitemap.xml", 1200)
     for match in re.finditer(r"<loc>https?://[^/]+(/[^<]*)</loc>", sitemap, flags=re.I):
         paths.add(match.group(1))

@@ -24,7 +24,16 @@ REPORTS_DIR = AGENT_DIR / "reports"
 AUTO_TOOLS = frozenset({
     "profile_target", "analyze_target", "fetch_api_routes",
     "run_playbook", "check_auth_flow", "check_login_apis", "map_site",
-    "compare_runs", "show_findings", "check_xss", "probe_xss", "list_skills", "run_skill",
+    "compare_runs", "show_findings", "list_skills", "run_skill", "run_skill_battery",
+    "check_xss", "probe_xss", "check_sqli", "probe_sqli",
+    "check_redirect", "probe_redirect", "check_traversal", "probe_traversal",
+    "check_auth_bypass", "probe_jwt", "check_idor", "probe_idor",
+    "probe_mass_assignment", "check_rate_limit",
+    "check_cors", "probe_cors", "check_ssrf", "probe_ssrf", "check_crlf", "probe_crlf",
+    "check_cmdi", "probe_cmdi", "check_ssti", "probe_ssti",
+    "check_csrf", "check_security_headers", "check_sensitive_leak",
+    "check_clickjacking", "check_http_methods", "run_passive_suite",
+    "run_autonomous_engagement",
 })
 
 SKIP_DIRS = frozenset({"__pycache__", ".git", ".venv", "venv"})
