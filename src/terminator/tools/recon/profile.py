@@ -3,7 +3,6 @@
 import socket
 
 from terminator import config
-from terminator.profiles import detect_profile
 from terminator.tools.http import (
     fetch_text,
     header_report,
@@ -55,14 +54,14 @@ def profile_target(target: str) -> str:
                 banner_blob += " " + banner
             lines.append(f"  {port}/{label}: {detail}")
 
-    # Lab VM — widen port set once banner confirms Metasploitable-style stack
-    profile = detect_profile(host, banner_blob)
-    if profile and profile.service_ports:
-        extra = set(profile.service_ports) - ports
+    # Multi-service host — widen scan from discovery (not a target profile)
+    if open_count >= 2:
+        extra = set(config.EXTENDED_PORTS) - ports
+        ports |= extra
         for port in sorted(extra):
             if port_open(host, port):
                 open_count += 1
-                label = profile.service_ports.get(port, "unknown")
+                label = config.EXTENDED_PORTS.get(port, "unknown")
                 if port in config.HTTP_PROBE_PORTS:
                     detail, base = http_probe(host, port)
                     banner_blob += " " + detail

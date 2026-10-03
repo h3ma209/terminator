@@ -237,24 +237,17 @@ def page_notes(body: str, page_url: str) -> list:
     return notes
 
 
-METASPLOITABLE_PATHS = (
-    "/", "/index.html", "/robots.txt", "/manual/", "/twiki/", "/phpMyAdmin/",
-    "/phpmyadmin/", "/mutillidae/", "/dav/", "/test.php", "/info.php",
-    "/phpinfo.php", "/admin/", "/login.php", "/login/", "/wordpress/",
-    "/dvwa/", "/webdav/", "/status", "/server-status",
-)
-
-
 def paths_to_probe(base: str) -> list[str]:
-    paths = {
-        "/", "/health", "/profile.html", "/search.html", "/search",
-        "/user", "/redirect", "/files", "/fetch", "/ping", "/render", "/echo",
-        "/api/login", "/api/profile", "/api/admin", "/api/cors", "/robots.txt",
-    }
+    # Seed paths for localhost lab; unknown targets rely on crawl/sitemap/robots
+    paths = {"/", "/robots.txt", "/sitemap.xml", "/openapi.json", "/swagger", "/api"}
     try:
         host, _ = parse_target(base)
-        if not localhost_only(host):
-            paths.update(METASPLOITABLE_PATHS)
+        if localhost_only(host):
+            paths.update({
+                "/health", "/profile.html", "/search.html", "/search",
+                "/user", "/redirect", "/files", "/fetch", "/ping", "/render", "/echo",
+                "/api/login", "/api/profile", "/api/admin", "/api/cors",
+            })
     except ValueError:
         pass
     sitemap = fetch_text(base + "/sitemap.xml", 1200)

@@ -89,4 +89,15 @@ API_CANDIDATES = (
     "/api/docs",
 )
 
-HTTP_PROBE_PORTS = frozenset({80, 443, 3000, 5000, 8000, 8080, 11434})
+HTTP_PROBE_PORTS = frozenset({80, 443, 3000, 5000, 8000, 8080, 8081, 8180, 11434})
+
+# Extra ports scanned when initial probe finds multiple services (discovery, not cheat sheet)
+EXTENDED_PORTS = {
+    23: "telnet",
+    25: "smtp",
+    139: "netbios",
+    445: "smb",
+    5900: "vnc",
+    6667: "irc",
+    8180: "tomcat-alt",
+}

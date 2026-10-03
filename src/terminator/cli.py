@@ -69,6 +69,7 @@ def main() -> int:
     parser.add_argument("--payload", default="", help="payload for probe commands")
     parser.add_argument("--skill", default="xss", help="probe skill type for probe command")
     parser.add_argument("--technique", default="", help="named technique from catalog (e.g. img_onerror, tautology)")
+    parser.add_argument("--plain", action="store_true", help="disable colors and emojis")
     args = parser.parse_args()
 
     if not args.command or args.command == "list":
@@ -108,14 +109,50 @@ def main() -> int:
     elif tool_name in {"inspect_url", "scan_local"}:
         url = args.target if args.target.endswith("/") else args.target + "/"
         result = handler(url)
+    elif tool_name == "run_takeover_engagement":
+        from terminator.core.console import Console
+        console = Console(color=not args.plain, emoji=not args.plain)
+        console.banner("takeover", args.target)
+        result = handler(args.target, log_fn=console.log)
+    elif tool_name == "run_bounty_engagement":
+        from terminator.core.console import Console
+        import json
+        console = Console(color=not args.plain, emoji=not args.plain)
+        console.banner("bounty", args.target)
+        scope_cfg = {}
+        if config.AUTOCONFIG_PATH.is_file():
+            scope_cfg = json.loads(config.AUTOCONFIG_PATH.read_text(encoding="utf-8"))
+        result = handler(
+            args.target,
+            log_fn=console.log,
+            scope_cfg=scope_cfg,
+            auth=scope_cfg.get("auth"),
+        )
+    elif tool_name == "run_autonomous_engagement":
+        from terminator.core.console import Console
+        import json
+        console = Console(color=not args.plain, emoji=not args.plain)
+        console.banner("autonomous", args.target)
+        auth = {"username": args.user, "password": args.password}
+        if config.AUTOCONFIG_PATH.is_file():
+            auth = json.loads(config.AUTOCONFIG_PATH.read_text(encoding="utf-8")).get("auth", auth)
+        result = handler(args.target, log_fn=console.log, auth=auth)
     else:
         result = handler(args.target)
 
+    out = result if isinstance(result, str) else str(result)
     if args.out:
-        Path(args.out).write_text(result, encoding="utf-8")
+        from terminator.core.console import strip_ansi
+        Path(args.out).write_text(strip_ansi(out), encoding="utf-8")
         print(f"wrote {args.out}")
+    elif tool_name in {
+        "run_takeover_engagement",
+        "run_bounty_engagement",
+        "run_autonomous_engagement",
+    } and not args.plain:
+        from terminator.core.console import Console
+        Console(color=True, emoji=True).print_report(out)
     else:
         import sys
-        out = result if isinstance(result, str) else str(result)
         sys.stdout.buffer.write(out.encode("utf-8", errors="replace") + b"\n")
     return 0
