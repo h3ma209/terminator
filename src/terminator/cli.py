@@ -28,6 +28,7 @@ COMMANDS = {
     "battery": ("run_skill_battery", "all skill checks"),
     "autonomous": ("run_autonomous_engagement", "full pentester brain cycle"),
     "takeover": ("run_takeover_engagement", "lab takeover — creds, services, webshell paths"),
+    "bounty": ("run_bounty_engagement", "bug bounty hunter — scope, impact chains, submission export"),
     "xss": ("check_xss", "reflected XSS probe"),
     "sqli": ("check_sqli", "SQL injection probe"),
     "redirect": ("check_redirect", "open redirect probe"),
@@ -114,5 +115,7 @@ def main() -> int:
         Path(args.out).write_text(result, encoding="utf-8")
         print(f"wrote {args.out}")
     else:
-        print(result)
+        import sys
+        out = result if isinstance(result, str) else str(result)
+        sys.stdout.buffer.write(out.encode("utf-8", errors="replace") + b"\n")
     return 0

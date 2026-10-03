@@ -45,8 +45,14 @@ def _run_takeover_engagement(*args, **kwargs):
     return run_takeover_engagement(*args, **kwargs)
 
 
+def _run_bounty_engagement(*args, **kwargs):
+    from terminator.pentest.bounty import run_bounty_engagement
+    return run_bounty_engagement(*args, **kwargs)
+
+
 HANDLERS["run_autonomous_engagement"] = _run_autonomous_engagement
 HANDLERS["run_takeover_engagement"] = _run_takeover_engagement
+HANDLERS["run_bounty_engagement"] = _run_bounty_engagement
 
 for _name, _spec in SKILL_DEFS.items():
     HANDLERS[_name] = _spec["handler"]

@@ -39,6 +39,12 @@ CLI
   python cli.py probe --skill xss --technique img_onerror
   python cli.py list
 
+BOUNTY HUNTER (impact chains + submission export)
+  python cli.py bounty http://127.0.0.1:3000
+  python autorun.py --once          # autoconfig mode: bounty
+  scope-aware, param mining, JWT/IDOR/mass-assignment chains
+  exports data/reports/bounty-submission.md (HackerOne-style)
+
 TAKEOVER (operator brain — intel chains, not spray)
   python cli.py takeover http://192.168.1.253
   python autorun.py --once          # autoconfig mode: takeover
