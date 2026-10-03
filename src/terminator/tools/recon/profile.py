@@ -2,8 +2,8 @@
 
 import socket
 
-import config
-from tools.http import (
+from terminator import config
+from terminator.tools.http import (
     fetch_text,
     header_report,
     http_probe,

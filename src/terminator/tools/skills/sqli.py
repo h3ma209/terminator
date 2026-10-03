@@ -3,8 +3,8 @@
 import json
 import re
 
-from tools.http import paths_to_probe, web_base
-from tools.probe_http import MAX_PAYLOAD_LEN, build_get_url, fetch_get, save_probe
+from terminator.tools.http import paths_to_probe, web_base
+from terminator.tools.probe_http import MAX_PAYLOAD_LEN, build_get_url, fetch_get, save_probe
 
 DEFAULT_PROBE = "' OR '1'='1"
 BASELINE = "1"

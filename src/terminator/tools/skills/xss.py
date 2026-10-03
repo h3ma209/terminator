@@ -5,8 +5,8 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlencode
 
-from memory_store import load_findings, now, save_findings
-from tools.http import paths_to_probe, web_base
+from terminator.core.memory import load_findings, now, save_findings
+from terminator.tools.http import paths_to_probe, web_base
 
 CANARY = "terminatorCANARY7x2"
 XSS_PROBE = "terminator<xsstest7x2>"

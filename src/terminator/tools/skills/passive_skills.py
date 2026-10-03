@@ -3,10 +3,10 @@
 import re
 import urllib.request
 
-import config
-from memory_store import load_findings, now, save_findings
-from tools.http import paths_to_probe, probe_path, request_method, web_base
-from tools.probe_http import fetch_get
+from terminator import config
+from terminator.core.memory import load_findings, now, save_findings
+from terminator.tools.http import paths_to_probe, probe_path, request_method, web_base
+from terminator.tools.probe_http import fetch_get
 
 SECRET_PATTERNS = (
     r"cyborg-dev-secret",
@@ -145,6 +145,83 @@ def check_http_methods(target: str) -> str:
     return "\n".join(lines)
 
 
+def build_passive_findings(data: dict) -> list[dict]:
+    """Structured passive findings from saved check results."""
+    findings: list[dict] = []
+
+    sh = data.get("security_headers") or {}
+    missing = sh.get("missing") or []
+    score = sh.get("score", 100)
+    if missing:
+        findings.append({
+            "category": "security_headers",
+            "technique": "header_gaps",
+            "severity": "medium" if score < 70 else "low",
+            "path": "/",
+            "param": "headers",
+            "payload": "",
+            "note": f"hardening score {score}/100 — missing {', '.join(missing)}",
+            "signals": missing,
+            "phase": "passive",
+        })
+
+    ck = data.get("clickjacking") or {}
+    if ck.get("vulnerable"):
+        findings.append({
+            "category": "clickjacking",
+            "technique": "missing_frame_protection",
+            "severity": "medium",
+            "path": "/",
+            "param": "headers",
+            "payload": "",
+            "note": "missing X-Frame-Options and/or CSP frame-ancestors",
+            "signals": ["clickjacking possible"],
+            "phase": "passive",
+        })
+
+    for hit in data.get("leaks") or []:
+        findings.append({
+            "category": "sensitive_leak",
+            "technique": "pattern_match",
+            "severity": "medium",
+            "path": hit.split(":", 1)[0] if ":" in hit else "/",
+            "param": "body",
+            "payload": "",
+            "note": hit,
+            "signals": [hit],
+            "phase": "passive",
+        })
+
+    for item in data.get("http_methods") or []:
+        if "DELETE" in item:
+            findings.append({
+                "category": "http_methods",
+                "technique": "delete_allowed",
+                "severity": "medium",
+                "path": item.split()[1] if len(item.split()) > 1 else "/",
+                "param": "method",
+                "payload": "DELETE",
+                "note": item,
+                "signals": [item],
+                "phase": "passive",
+            })
+
+    for issue in (data.get("csrf") or {}).get("issues") or []:
+        findings.append({
+            "category": "csrf",
+            "technique": "missing_token",
+            "severity": "medium",
+            "path": issue.split()[0] if issue else "/",
+            "param": "form",
+            "payload": "",
+            "note": issue,
+            "signals": [issue],
+            "phase": "passive",
+        })
+
+    return findings
+
+
 def run_passive_suite(target: str) -> str:
     checks = (
         check_security_headers,
@@ -155,3 +232,8 @@ def run_passive_suite(target: str) -> str:
     )
     parts = [fn(target) for fn in checks]
     return "\n\n".join(parts)
+
+
+def run_passive_suite_with_findings(target: str) -> tuple[str, list[dict]]:
+    text = run_passive_suite(target)
+    return text, build_passive_findings(load_findings())

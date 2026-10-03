@@ -4,8 +4,8 @@ import re
 import urllib.request
 from urllib.parse import urlparse
 
-import config
-from tools.http import NoRedirect, cookie_notes, page_notes, tls_note
+from terminator import config
+from terminator.tools.http import NoRedirect, cookie_notes, page_notes, tls_note
 
 
 def fetch_url(url: str) -> str:

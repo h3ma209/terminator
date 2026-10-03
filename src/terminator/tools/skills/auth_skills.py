@@ -6,9 +6,9 @@ import time
 import urllib.error
 import urllib.request
 
-from memory_store import load_findings, now, save_findings
-from tools.http import request_method, web_base
-from tools.probe_http import build_get_url, fetch_get, save_probe
+from terminator.core.memory import load_findings, now, save_findings
+from terminator.tools.http import request_method, web_base
+from terminator.tools.probe_http import build_get_url, fetch_get, save_probe
 
 USER_DB = {
     "1": {"id": 1, "name": "demo", "role": "user"},

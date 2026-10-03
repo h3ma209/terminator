@@ -13,6 +13,7 @@ dist/
 build/
 
 # Agent runtime data
+data/
 memory.jsonl
 findings.json
 reports/

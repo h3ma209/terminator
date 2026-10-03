@@ -2,8 +2,8 @@
 
 import re
 
-from memory_store import load_findings
-from targets import extract_url
+from terminator.core.memory import load_findings
+from terminator.core.targets import extract_url
 
 SKILL_TYPES = {
     "xss": {

@@ -51,7 +51,7 @@ def build_get_url(base: str, path: str, param: str, value: str) -> str:
 
 
 def save_probe(skill: str, data: dict) -> None:
-    from memory_store import load_findings, now, save_findings
+    from terminator.core.memory import load_findings, now, save_findings
 
     save_findings({
         **load_findings(),

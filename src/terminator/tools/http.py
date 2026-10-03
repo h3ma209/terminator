@@ -8,7 +8,7 @@ import urllib.request
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-import config
+from terminator import config
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):

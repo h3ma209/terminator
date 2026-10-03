@@ -5,10 +5,10 @@ import sys
 import urllib.error
 import urllib.request
 
-import config
-from cleanup import clean_text, clean_tool_output, prepare_messages
-from tool_calls import calls_from_text
-from tools import HANDLERS, TOOLS
+from terminator import config
+from terminator.agent.cleanup import clean_text, clean_tool_output, prepare_messages
+from terminator.agent.tool_calls import calls_from_text
+from terminator.tools import HANDLERS, TOOLS
 
 
 def chat(messages: list, use_tools: bool, tools: list | None = None) -> dict:

@@ -2,8 +2,8 @@
 
 import re
 
-import config
-from tools.http import fetch_text, request_method, web_base
+from terminator import config
+from terminator.tools.http import fetch_text, request_method, web_base
 
 
 def discover_api_paths(base: str) -> list[str]:

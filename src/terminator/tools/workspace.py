@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-import config
+from terminator import config
 
 
 def _inside(path: Path) -> Path:

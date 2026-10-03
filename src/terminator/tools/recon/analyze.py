@@ -1,8 +1,8 @@
 """Merged intel and prioritization."""
 
-from tools.http import fetch_text, paths_to_probe, probe_path, score_probe, web_base
-from tools.profile import profile_target
-from tools.web import inspect_url
+from terminator.tools.http import fetch_text, paths_to_probe, probe_path, score_probe, web_base
+from terminator.tools.recon.profile import profile_target
+from terminator.tools.web import inspect_url
 
 
 def analyze_target(target: str) -> str:

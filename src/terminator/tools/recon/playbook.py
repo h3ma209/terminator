@@ -5,8 +5,8 @@ import re
 import urllib.error
 import urllib.request
 
-import config
-from memory_store import (
+from terminator import config
+from terminator.core.memory import (
     decode_jwt,
     load_findings,
     list_snapshots,
@@ -15,9 +15,9 @@ from memory_store import (
     save_findings,
     save_snapshot,
 )
-from tools.analyze import analyze_target
-from tools.api_routes import discover_api_paths, fetch_api_routes
-from tools.http import (
+from terminator.tools.recon.analyze import analyze_target
+from terminator.tools.recon.api_routes import discover_api_paths, fetch_api_routes
+from terminator.tools.http import (
     fetch_text,
     http_probe,
     parse_target,
@@ -28,9 +28,9 @@ from tools.http import (
     score_probe,
     web_base,
 )
-from tools.profile import profile_target
-from tools.skills import run_skill_battery
-from tools.xss import check_xss
+from terminator.tools.recon.profile import profile_target
+from terminator.tools.skills import run_skill_battery
+from terminator.tools.skills.xss import check_xss
 
 
 def _collect_snapshot(base: str) -> dict:

@@ -1,19 +1,19 @@
 """Tool registry."""
 
-from tools.analyze import analyze_target
-from tools.api_routes import fetch_api_routes
-from tools.playbook import (
+from terminator.tools.recon.analyze import analyze_target
+from terminator.tools.recon.api_routes import fetch_api_routes
+from terminator.tools.recon.playbook import (
     check_auth_flow,
     compare_runs,
     map_site,
     run_playbook,
     show_findings,
 )
-from tools.profile import profile_target
-from tools.schemas import TOOLS
-from tools.skills import SKILL_DEFS, list_skills, run_skill, run_skill_battery
-from tools.web import fetch_url, inspect_url, scan_local
-from tools.workspace import list_dir, read_file
+from terminator.tools.recon.profile import profile_target
+from terminator.tools.schemas import TOOLS
+from terminator.tools.skills import SKILL_DEFS, list_skills, run_skill, run_skill_battery
+from terminator.tools.web import fetch_url, inspect_url, scan_local
+from terminator.tools.workspace import list_dir, read_file
 
 HANDLERS = {
     "list_dir": list_dir,
@@ -36,7 +36,7 @@ HANDLERS = {
 
 
 def _run_autonomous_engagement(*args, **kwargs):
-    from autonomous import run_autonomous_engagement
+    from terminator.pentest.autonomous import run_autonomous_engagement
     return run_autonomous_engagement(*args, **kwargs)
 
 

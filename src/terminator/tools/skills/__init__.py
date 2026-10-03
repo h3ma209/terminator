@@ -1,7 +1,7 @@
 """Skill registry — model supplies params, handler runs probe."""
 
-from skill_mode import SKILL_TYPES, build_skill_prompt, detect_skill_type, extract_payload, parse_skill_hints
-from tools.auth_skills import (
+from terminator.agent.skill_mode import SKILL_TYPES, build_skill_prompt, detect_skill_type, extract_payload, parse_skill_hints
+from terminator.tools.skills.auth_skills import (
     check_auth_bypass,
     check_idor,
     check_rate_limit,
@@ -9,9 +9,9 @@ from tools.auth_skills import (
     probe_jwt,
     probe_mass_assignment,
 )
-from tools.injection_skills import check_cmdi, check_ssti, probe_cmdi, probe_ssti
-from tools.network_skills import check_cors, check_crlf, check_ssrf, probe_cors, probe_crlf, probe_ssrf
-from tools.passive_skills import (
+from terminator.tools.skills.injection_skills import check_cmdi, check_ssti, probe_cmdi, probe_ssti
+from terminator.tools.skills.network_skills import check_cors, check_crlf, check_ssrf, probe_cors, probe_crlf, probe_ssrf
+from terminator.tools.skills.passive_skills import (
     check_clickjacking,
     check_csrf,
     check_http_methods,
@@ -19,10 +19,10 @@ from tools.passive_skills import (
     check_sensitive_leak,
     run_passive_suite,
 )
-from tools.redirect import check_redirect, probe_redirect
-from tools.sqli import check_sqli, probe_sqli
-from tools.traversal import check_traversal, probe_traversal
-from tools.xss import check_xss, probe_xss
+from terminator.tools.skills.redirect import check_redirect, probe_redirect
+from terminator.tools.skills.sqli import check_sqli, probe_sqli
+from terminator.tools.skills.traversal import check_traversal, probe_traversal
+from terminator.tools.skills.xss import check_xss, probe_xss
 
 
 def _probe_schema(desc: str, path_hint: str, param_hint: str, payload_hint: str) -> dict:
@@ -125,7 +125,7 @@ def probe_schemas_for(skill: str) -> list:
 
 
 def _probe_ok(hints: dict) -> bool:
-    from memory_store import load_findings
+    from terminator.core.memory import load_findings
 
     cfg = SKILL_TYPES.get(hints["skill"], {})
     probe = load_findings().get("last_probe") or {}

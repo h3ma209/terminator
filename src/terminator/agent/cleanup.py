@@ -2,8 +2,8 @@
 
 import re
 
-import config
-from tool_calls import calls_from_text
+from terminator import config
+from terminator.agent.tool_calls import calls_from_text
 
 
 def strip_html(html: str) -> str:

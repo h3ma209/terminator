@@ -46,7 +46,7 @@ AUTONOMOUS (no chat, no model — pentester brain)
     3. stops category when confirmed, escalates on partial signals
     4. auth chains: jwt none variants, mass assignment bodies, token follow-up
     5. rotates starting technique each cycle
-    reports/engagement-summary.txt lists WHICH technique worked
+    data/reports/engagement-summary.txt lists WHICH technique worked
 
 MODES
   python agent.py              tools-first chat

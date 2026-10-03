@@ -3,8 +3,8 @@
 import re
 import urllib.request
 
-from tools.http import web_base
-from tools.probe_http import build_get_url, fetch_get, save_probe
+from terminator.tools.http import web_base
+from terminator.tools.probe_http import build_get_url, fetch_get, save_probe
 
 EVIL_ORIGIN = "https://evil.example"
 

@@ -2,24 +2,24 @@
 
 import re
 
-from tools.analyze import analyze_target
-from tools.api_routes import fetch_api_routes
-from tools.playbook import (
+from terminator.tools.recon.analyze import analyze_target
+from terminator.tools.recon.api_routes import fetch_api_routes
+from terminator.tools.recon.playbook import (
     check_auth_flow,
     compare_runs,
     map_site,
     run_playbook,
     show_findings,
 )
-from tools.profile import profile_target
-from tools.web import fetch_url, inspect_url, scan_local
-from tools.workspace import list_dir, read_file
-from skill_mode import wants_skill_mode
-from targets import extract_url
-from tools.auth_skills import check_auth_bypass, check_idor, check_rate_limit
-from tools.injection_skills import check_cmdi, check_ssti
-from tools.network_skills import check_cors, check_crlf, check_ssrf
-from tools.passive_skills import (
+from terminator.tools.recon.profile import profile_target
+from terminator.tools.web import fetch_url, inspect_url, scan_local
+from terminator.tools.workspace import list_dir, read_file
+from terminator.agent.skill_mode import wants_skill_mode
+from terminator.core.targets import extract_url
+from terminator.tools.skills.auth_skills import check_auth_bypass, check_idor, check_rate_limit
+from terminator.tools.skills.injection_skills import check_cmdi, check_ssti
+from terminator.tools.skills.network_skills import check_cors, check_crlf, check_ssrf
+from terminator.tools.skills.passive_skills import (
     check_clickjacking,
     check_csrf,
     check_http_methods,
@@ -27,12 +27,12 @@ from tools.passive_skills import (
     check_sensitive_leak,
     run_passive_suite,
 )
-from tools.redirect import check_redirect
-from autonomous import run_autonomous_engagement
-from tools.skills import run_skill_battery
-from tools.sqli import check_sqli
-from tools.traversal import check_traversal
-from tools.xss import check_xss
+from terminator.tools.skills.redirect import check_redirect
+from terminator.pentest.autonomous import run_autonomous_engagement
+from terminator.tools.skills import run_skill_battery
+from terminator.tools.skills.sqli import check_sqli
+from terminator.tools.skills.traversal import check_traversal
+from terminator.tools.skills.xss import check_xss
 
 
 def check_login_apis(target: str) -> str:

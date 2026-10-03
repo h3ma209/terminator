@@ -161,6 +161,6 @@ TOOLS = [
     },
 ]
 
-from tools.skills import skill_tool_schemas
+from terminator.tools.skills import skill_tool_schemas
 
 TOOLS.extend(skill_tool_schemas())

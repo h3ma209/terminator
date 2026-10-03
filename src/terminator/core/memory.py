@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-import config
+from terminator import config
 
 
 def now() -> str:

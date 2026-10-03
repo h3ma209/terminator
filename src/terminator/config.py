@@ -15,11 +15,19 @@ TOOL_OUTPUT_MAX = 1800
 FETCH_BODY_MAX = 500
 FILE_HEAD_LINES = 60
 
-AGENT_DIR = Path(__file__).resolve().parent
+PACKAGE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = PACKAGE_DIR.parent.parent
+DATA_DIR = PROJECT_ROOT / "data"
 ROOT = Path.cwd().resolve()
-MEMORY_PATH = AGENT_DIR / "memory.jsonl"
-FINDINGS_PATH = AGENT_DIR / "findings.json"
-REPORTS_DIR = AGENT_DIR / "reports"
+
+MEMORY_PATH = DATA_DIR / "memory.jsonl"
+FINDINGS_PATH = DATA_DIR / "findings.json"
+REPORTS_DIR = DATA_DIR / "reports"
+AUTOCONFIG_PATH = PROJECT_ROOT / "autoconfig.json"
+LOG_PATH = DATA_DIR / "autorun.log"
+
+# backward compat for code that referenced AGENT_DIR
+AGENT_DIR = PROJECT_ROOT
 
 AUTO_TOOLS = frozenset({
     "profile_target", "analyze_target", "fetch_api_routes",
@@ -36,7 +44,7 @@ AUTO_TOOLS = frozenset({
     "run_autonomous_engagement",
 })
 
-SKIP_DIRS = frozenset({"__pycache__", ".git", ".venv", "venv"})
+SKIP_DIRS = frozenset({"__pycache__", ".git", ".venv", "venv", "src", "data"})
 
 HEADER_CHECKS = (
     "x-content-type-options",
