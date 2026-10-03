@@ -5,8 +5,9 @@ import re
 
 from terminator.tools.http import paths_to_probe, web_base
 from terminator.tools.probe_http import MAX_PAYLOAD_LEN, build_get_url, fetch_get, save_probe
+from terminator.catalog import all_payloads, default_payload
 
-DEFAULT_PROBE = "' OR '1'='1"
+DEFAULT_PROBE = default_payload("sqli")
 BASELINE = "1"
 ERROR_PATTERNS = (
     r"sql syntax",
@@ -117,7 +118,7 @@ def check_sqli(
     if not base:
         return err
 
-    use_payload = payload or DEFAULT_PROBE
+    payload_list = [payload] if payload else all_payloads("sqli")
     targets = []
     if path and param:
         targets = [(path.split("?", 1)[0], param)]
@@ -134,14 +135,17 @@ def check_sqli(
         if key in seen:
             continue
         seen.add(key)
-        probes.append(probe_sqli(base, tpath, tparam, use_payload))
+        for pl in payload_list:
+            probes.append(probe_sqli(base, tpath, tparam, pl))
+            if "vulnerable: True" in probes[-1]:
+                break
 
     vuln = [p for p in probes if "vulnerable: True" in p]
     lines = [
         "=== SQLi check ===",
         f"base: {base}",
         f"probes: {len(probes)}",
-        f"payload: {use_payload}",
+        f"payloads tried: {len(payload_list)} style(s)",
         "",
         f"LIKELY VULNERABLE: {len(vuln)}",
     ]

@@ -1,109 +1,33 @@
-"""Skill mode — model crafts payload; agent locks path/target."""
+"""Skill mode — model crafts payload; agent knows all technique variations."""
+
+from __future__ import annotations
 
 import re
 
 from terminator.core.memory import load_findings
 from terminator.core.targets import extract_url
+from terminator.catalog import (
+    PATH_MAP,
+    SKILL_CONFIG,
+    build_probe_plan,
+    default_payload,
+    format_techniques_for_prompt,
+    get_technique,
+    resolve_technique,
+    wants_all_variations,
+)
 
-SKILL_TYPES = {
-    "xss": {
-        "keywords": ("xss", "cross-site", "cross site", "script tag"),
-        "defaults": {"path": "/search", "param": "q"},
-        "probe_tool": "probe_xss",
-        "fallback_payload": "<script>alert(1)</script>",
-        "instruction": "Craft an HTML/JS XSS payload.",
-    },
-    "sqli": {
-        "keywords": ("sqli", "sql injection", "sqlinjection", "sql inject"),
-        "defaults": {"path": "/user", "param": "id"},
-        "probe_tool": "probe_sqli",
-        "fallback_payload": "' OR '1'='1",
-        "instruction": "Craft a SQL injection payload.",
-    },
-    "redirect": {
-        "keywords": ("open redirect", "redirect check", "url redirect"),
-        "defaults": {"path": "/redirect", "param": "url"},
-        "probe_tool": "probe_redirect",
-        "fallback_payload": "https://evil.example/phish",
-        "instruction": "Craft an external URL for open redirect test.",
-    },
-    "traversal": {
-        "keywords": ("path traversal", "directory traversal", "lfi", "../"),
-        "defaults": {"path": "/files", "param": "name"},
-        "probe_tool": "probe_traversal",
-        "fallback_payload": "../../../etc/passwd",
-        "instruction": "Craft a path traversal payload.",
-    },
-    "jwt": {
-        "keywords": ("jwt", "auth bypass", "token bypass", "alg none", "algorithm none"),
-        "defaults": {"path": "/api/admin", "param": "Authorization"},
-        "probe_tool": "probe_jwt",
-        "fallback_payload": "",
-        "instruction": "Craft a JWT token (e.g. alg:none with admin role) or leave payload empty for auto none-token.",
-    },
-    "idor": {
-        "keywords": ("idor", "insecure direct", "object reference"),
-        "defaults": {"path": "/user", "param": "id"},
-        "probe_tool": "probe_idor",
-        "fallback_payload": "2",
-        "instruction": "Craft an object ID to access another user's data.",
-    },
-    "mass_assignment": {
-        "keywords": ("mass assignment", "parameter tamper", "role injection"),
-        "defaults": {"path": "/api/login", "param": "body"},
-        "probe_tool": "probe_mass_assignment",
-        "fallback_payload": '{"username":"demo","password":"demo","role":"admin"}',
-        "instruction": "Craft JSON body with extra privileged fields for login.",
-    },
-    "cors": {
-        "keywords": ("cors", "cross-origin", "access-control"),
-        "defaults": {"path": "/api/cors", "param": "Origin"},
-        "probe_tool": "probe_cors",
-        "fallback_payload": "https://evil.example",
-        "instruction": "Craft an evil Origin header value.",
-    },
-    "ssrf": {
-        "keywords": ("ssrf", "server-side request", "fetch url"),
-        "defaults": {"path": "/fetch", "param": "url"},
-        "probe_tool": "probe_ssrf",
-        "fallback_payload": "http://127.0.0.1:11434/",
-        "instruction": "Craft an internal URL for the server to fetch.",
-    },
-    "cmdi": {
-        "keywords": ("command injection", "cmd injection", "cmdi", "os injection", "shell inject"),
-        "defaults": {"path": "/ping", "param": "host"},
-        "probe_tool": "probe_cmdi",
-        "fallback_payload": "127.0.0.1;id",
-        "instruction": "Craft a command injection payload with shell metacharacters.",
-    },
-    "ssti": {
-        "keywords": ("ssti", "template injection", "server-side template"),
-        "defaults": {"path": "/render", "param": "template"},
-        "probe_tool": "probe_ssti",
-        "fallback_payload": "{{7*7}}",
-        "instruction": "Craft a template expression payload.",
-    },
-    "crlf": {
-        "keywords": ("crlf", "header injection", "response splitting"),
-        "defaults": {"path": "/echo", "param": "msg"},
-        "probe_tool": "probe_crlf",
-        "fallback_payload": "a%0d%0AX-Injected: evil",
-        "instruction": "Craft a CRLF/header injection payload.",
-    },
-}
-
-PATH_MAP = {
-    "/search": "q",
-    "/user": "id",
-    "/redirect": "url",
-    "/files": "name",
-    "/fetch": "url",
-    "/ping": "host",
-    "/render": "template",
-    "/echo": "msg",
-    "/api/cors": "Origin",
-    "/api/admin": "Authorization",
-    "/api/login": "body",
+# backward compat — enriched with fallback_payload per skill
+SKILL_TYPES: dict[str, dict] = {
+    name: {
+        **cfg,
+        "fallback_payload": default_payload(name) if name in {
+            "xss", "sqli", "redirect", "traversal", "idor", "cors", "ssrf", "cmdi", "ssti", "crlf",
+        } else (
+            '{"username":"demo","password":"demo","role":"admin"}' if name == "mass_assignment" else ""
+        ),
+    }
+    for name, cfg in SKILL_CONFIG.items()
 }
 
 
@@ -123,17 +47,18 @@ def detect_skill_type(text: str) -> str:
 
 def wants_skill_mode(text: str) -> bool:
     lower = text.lower().strip()
-    if lower in {"/skills", "skills", "list skills"}:
+    if lower in {"/skills", "skills", "list skills", "/catalog", "catalog"}:
         return False
     craft_hints = (
         "craft", "try payload", "test with", "probe with", "inject",
-        "use payload", "custom payload", "run skill",
+        "use payload", "custom payload", "run skill", "all variations",
+        "all techniques", "try all", "technique",
     )
     if any(h in lower for h in craft_hints):
         return True
     for cfg in SKILL_TYPES.values():
         if any(k in lower for k in cfg["keywords"]) and any(
-            w in lower for w in ("craft", "try", "test", "payload", "inject", "probe")
+            w in lower for w in ("craft", "try", "test", "payload", "inject", "probe", "technique")
         ):
             return True
     if re.search(r"<[^>]+>", text):
@@ -165,6 +90,12 @@ def parse_skill_hints(text: str, skill: str) -> dict:
     match = re.search(r"(/[\w./-]+)", text)
     if match and hints["path"] in ("", "/search"):
         hints["path"] = match.group(1).split("?", 1)[0]
+    named = resolve_technique(skill, text)
+    if named:
+        hints["technique"] = named[0]
+        hints["payload"] = named[1]
+    if wants_all_variations(text):
+        hints["all_variations"] = True
     return hints
 
 
@@ -172,17 +103,30 @@ def build_skill_prompt(text: str, skill: str | None = None) -> str:
     skill = skill or detect_skill_type(text)
     cfg = SKILL_TYPES[skill]
     hints = parse_skill_hints(text, skill)
+    techniques_block = format_techniques_for_prompt(skill)
+    multi = (
+        "User asked for ALL variations — call the probe once per technique listed."
+        if hints.get("all_variations")
+        else "Pick one technique OR craft a custom payload. You may call probe multiple times with different techniques."
+    )
     return (
-        f"You test {skill} on localhost using {cfg['probe_tool']} ONLY. "
+        f"You test {skill} on localhost using {cfg['probe_tool']}. "
         f"Use exactly: target={hints['target']}, path={hints['path']}, param={hints['param']}. "
-        f"{cfg['instruction']} "
-        f"Call {cfg['probe_tool']} once, then answer in 1-2 plain sentences."
+        f"{cfg['instruction']}\n"
+        f"Known techniques and injection styles:\n{techniques_block}\n"
+        f"{multi} "
+        f"Name the technique in your reply when you use a catalog payload."
     )
 
 
 def extract_payload(text: str, skill: str = "xss") -> str:
     if not text:
         return SKILL_TYPES.get(skill, SKILL_TYPES["xss"])["fallback_payload"]
+
+    named = resolve_technique(skill, text)
+    if named:
+        return named[1]
+
     cfg = SKILL_TYPES.get(skill, SKILL_TYPES["xss"])
 
     if skill == "jwt":
@@ -197,13 +141,19 @@ def extract_payload(text: str, skill: str = "xss") -> str:
             return match.group(1)
 
     if skill == "xss":
-        for pattern in (r"(<script[^>]*>.*?</script>)", r"(<[^>]*on\w+[^>]*>)"):
+        for pattern in (
+            r"(<script[^>]*>.*?</script>)",
+            r"(<img[^>]*onerror[^>]*>)",
+            r"(<svg[^>]*onload[^>]*>)",
+            r"(<details[^>]*ontoggle[^>]*>)",
+            r"(<[^>]*on\w+[^>]*>)",
+        ):
             match = re.search(pattern, text, flags=re.I | re.S)
             if match:
                 return match.group(1)
 
     if skill in {"sqli", "traversal", "crlf"}:
-        match = re.search(r"(\.{2,}/[\w./-]+)", text)
+        match = re.search(r"(\.{2,}/[\w./%-]+)", text)
         if match:
             return match.group(1)
         match = re.search(r"(['\"].*?(?:OR|--|UNION).+?['\"])", text, flags=re.I)
@@ -211,19 +161,31 @@ def extract_payload(text: str, skill: str = "xss") -> str:
             return match.group(1).strip("'\"")
 
     if skill in {"redirect", "cors", "ssrf"}:
-        match = re.search(r"(https?://[^\s'\"<>]+)", text, flags=re.I)
+        match = re.search(r"(https?://[^\s'\"<>]+|//[^\s'\"<>]+|file://[^\s'\"<>]+)", text, flags=re.I)
         if match:
             return match.group(1)
 
     if skill == "cmdi":
-        match = re.search(r"([\w.]+[;&|`][\w]+)", text)
-        if match:
-            return match.group(1)
+        for pattern in (
+            r"([\w.]+;[\w]+)",
+            r"([\w.]+\|[\w]+)",
+            r"([\w.]+`[\w]+`)",
+            r"([\w.]+&&[\w]+)",
+        ):
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1)
 
     if skill == "ssti":
-        match = re.search(r"(\{\{[^}]+\}\})", text)
-        if match:
-            return match.group(1)
+        for pattern in (r"(\{\{[^}]+\}\})", r"(\$\{[^}]+\})"):
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1)
+
+    if skill == "idor":
+        tech = get_technique(skill, text)
+        if tech:
+            return tech.payload
 
     match = re.search(r"payload[:\s]+([^\n]+)", text, flags=re.I)
     if match:
@@ -239,8 +201,13 @@ def answer_probe_followup() -> str:
         path = probe.get("path", "?")
         param = probe.get("param", "?")
         payload = probe.get("payload", "?")
+        technique = probe.get("technique", "")
         contexts = ", ".join(probe.get("contexts") or probe.get("signals") or []) or "none"
+        tech_line = f"\n  technique: {technique}" if technique else ""
         if probe.get("vulnerable"):
-            return f"Yes - {skill} vulnerable on {path} ({param}).\n  payload: {payload}\n  signals: {contexts}"
-        return f"No - {skill} not vulnerable.\n  last payload: {payload}"
-    return "No probe data yet. Try: craft sqli payload and test /user on http://127.0.0.1:3000"
+            return (
+                f"Yes - {skill} vulnerable on {path} ({param}).{tech_line}\n"
+                f"  payload: {payload}\n  signals: {contexts}"
+            )
+        return f"No - {skill} not vulnerable.{tech_line}\n  last payload: {payload}"
+    return "No probe data yet. Try: craft sqli tautology on /user http://127.0.0.1:3000"

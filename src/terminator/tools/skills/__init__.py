@@ -1,6 +1,7 @@
 """Skill registry — model supplies params, handler runs probe."""
 
-from terminator.agent.skill_mode import SKILL_TYPES, build_skill_prompt, detect_skill_type, extract_payload, parse_skill_hints
+from terminator.tools.skills.auth_skills import craft_none_jwt
+from terminator.catalog import build_probe_plan, format_catalog_summary
 from terminator.tools.skills.auth_skills import (
     check_auth_bypass,
     check_idor,
@@ -138,7 +139,50 @@ def _probe_ok(hints: dict) -> bool:
     return True
 
 
+def _resolve_jwt_payload(skill: str, technique: str, payload: str) -> str:
+    if skill != "jwt" or payload:
+        return payload
+    if "admin_admin" in technique:
+        return craft_none_jwt("admin", "admin")
+    return craft_none_jwt("demo", "admin")
+
+
+def _run_probe_plan(
+    skill: str,
+    handler,
+    target: str,
+    path: str,
+    param: str,
+    plan: list[tuple[str, str]],
+    log_prefix: str = "skill",
+) -> str:
+    blocks = []
+    hit = None
+    for technique, payload in plan:
+        payload = _resolve_jwt_payload(skill, technique, payload)
+        print(f"\n[{log_prefix}] {technique} — {payload[:60]}{'...' if len(payload) > 60 else ''}")
+        result = handler(target, path, param, payload)
+        blocks.append(f"=== {technique} ===\n{result}")
+        if "vulnerable: True" in result:
+            hit = (technique, result)
+            break
+    if hit:
+        technique, result = hit
+        return f"{chr(10).join(blocks)}\n\n[+] CONFIRMED via {technique}\nYes - vulnerable."
+    if len(blocks) == 1:
+        return f"{blocks[0]}\n\nNo - not vulnerable."
+    return f"{chr(10).join(blocks)}\n\nNo - not vulnerable after {len(plan)} technique(s)."
+
+
 def run_craft_skill(user_line: str, ask_fn, messages: list | None = None) -> str:
+    from terminator.agent.skill_mode import (
+        SKILL_TYPES,
+        build_skill_prompt,
+        detect_skill_type,
+        extract_payload,
+        parse_skill_hints,
+    )
+
     skill = detect_skill_type(user_line)
     cfg = SKILL_TYPES[skill]
     hints = parse_skill_hints(user_line, skill)
@@ -157,18 +201,32 @@ def run_craft_skill(user_line: str, ask_fn, messages: list | None = None) -> str
     if _probe_ok(hints):
         return answer
 
-    payload = extract_payload(answer, skill) or cfg["fallback_payload"]
-    print(f"\n[skill fix — running {tool_name}]")
-    result = handler(target, path, param, payload)
-    verdict = "Yes - vulnerable." if "vulnerable: True" in result else "No - not vulnerable."
-    return f"{result}\n\n{verdict}" if "<tool>" in (answer or "") else f"{result}\n\n{verdict}\n{answer.strip()}" if answer.strip() else f"{result}\n\n{verdict}"
+    model_payload = extract_payload(answer, skill) or extract_payload(user_line, skill)
+    plan = build_probe_plan(skill, user_line, model_payload)
+    if hints.get("payload") and hints.get("technique"):
+        plan = [(hints["technique"], hints["payload"])]
+    elif not plan:
+        plan = [("fallback", cfg["fallback_payload"])]
+
+    print(f"\n[skill mode — {len(plan)} technique(s) for {skill}]")
+    crafted = _run_probe_plan(skill, handler, target, path, param, plan)
+    if answer.strip() and "<tool>" not in (answer or ""):
+        return f"{crafted}\n\n{answer.strip()}"
+    return crafted
 
 
 run_craft_xss = run_craft_skill
 
 
 def list_skills() -> str:
-    lines = ["=== agent skills ===", "Model crafts payload; tool executes on localhost.", ""]
+    lines = [
+        "=== agent skills ===",
+        "Model crafts payload OR picks named technique; agent escalates through catalog.",
+        "",
+        format_catalog_summary(),
+        "",
+        "=== registered tools ===",
+    ]
     groups: dict[str, list] = {}
     for name, spec in SKILL_DEFS.items():
         groups.setdefault(spec.get("skill", "?"), []).append((name, spec))

@@ -5,7 +5,7 @@ import urllib.request
 from urllib.parse import urlparse
 
 from terminator import config
-from terminator.tools.http import NoRedirect, cookie_notes, page_notes, tls_note
+from terminator.tools.http import NoRedirect, cookie_notes, is_allowed_host, page_notes, tls_note
 
 
 def fetch_url(url: str) -> str:
@@ -23,8 +23,8 @@ def fetch_url(url: str) -> str:
 
 def scan_local(url: str) -> str:
     parsed = urlparse(url)
-    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost"}:
-        return "blocked: only http://127.0.0.1 or http://localhost"
+    if parsed.scheme != "http" or not parsed.hostname or not is_allowed_host(parsed.hostname):
+        return "blocked: target not in scope (allow_lan or add to targets)"
     opener = urllib.request.build_opener(NoRedirect())
     req = urllib.request.Request(url, method="GET")
     try:

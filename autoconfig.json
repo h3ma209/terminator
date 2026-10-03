@@ -1,13 +1,15 @@
 {
-  "targets": ["http://127.0.0.1:3000"],
-  "interval_seconds": 0,
+  "targets": ["http://192.168.1.253"],
+  "allow_lan": true,
+  "mode": "takeover",
+  "use_planner": true,
+  "interval_seconds": 3600,
   "run_on_start": true,
   "compare_after_run": true,
-  "mode": "autonomous",
   "auth_every_cycles": 1,
   "deep_analyze_every": 6,
   "auth": {
-    "username": "demo",
-    "password": "demo"
+    "username": "msfadmin",
+    "password": "msfadmin"
   }
 }

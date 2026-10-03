@@ -4,8 +4,9 @@ import re
 
 from terminator.tools.http import web_base
 from terminator.tools.probe_http import MAX_PAYLOAD_LEN, build_get_url, fetch_get, save_probe
+from terminator.catalog import all_payloads, default_payload
 
-DEFAULT_PROBE = "../../../etc/passwd"
+DEFAULT_PROBE = default_payload("traversal")
 TRAVERSAL_HINTS = (
     r"root:.*?:/bin/",
     r"/etc/passwd",
@@ -72,12 +73,10 @@ def probe_traversal(target: str, path: str, param: str, payload: str) -> str:
 
 
 def check_traversal(target: str, payload: str = "", path: str = "", param: str = "") -> str:
-    base, err = web_base(target)
-    if not base:
-        return err
+    from terminator.catalog import check_with_variations
 
-    use_payload = payload or DEFAULT_PROBE
     tpath = path.split("?", 1)[0] if path else "/files"
-    tparam = param or "name"
-    result = probe_traversal(base, tpath, tparam, use_payload)
-    return "=== path traversal check ===\n" + result.split("=== probe_traversal ===", 1)[-1].lstrip()
+    return check_with_variations(
+        "traversal", "path traversal check", probe_traversal,
+        target, tpath, param or "name", payload,
+    )

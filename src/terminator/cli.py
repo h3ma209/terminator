@@ -8,6 +8,8 @@ from pathlib import Path
 from terminator import config
 from terminator.agent.skill_mode import SKILL_TYPES
 from terminator.tools import HANDLERS
+from terminator.catalog import get_technique
+from terminator.tools.http import sync_allowed_from_targets
 
 DEFAULT_TARGET = "http://127.0.0.1:3000"
 
@@ -25,6 +27,7 @@ COMMANDS = {
     "skills": ("list_skills", "skill catalog"),
     "battery": ("run_skill_battery", "all skill checks"),
     "autonomous": ("run_autonomous_engagement", "full pentester brain cycle"),
+    "takeover": ("run_takeover_engagement", "lab takeover — creds, services, webshell paths"),
     "xss": ("check_xss", "reflected XSS probe"),
     "sqli": ("check_sqli", "SQL injection probe"),
     "redirect": ("check_redirect", "open redirect probe"),
@@ -42,6 +45,15 @@ COMMANDS = {
 }
 
 
+def _apply_scope(target: str) -> None:
+    sync_allowed_from_targets([target])
+    if config.AUTOCONFIG_PATH.is_file():
+        import json
+        data = json.loads(config.AUTOCONFIG_PATH.read_text(encoding="utf-8"))
+        config.ALLOW_LAN = bool(data.get("allow_lan", False))
+        sync_allowed_from_targets(data.get("targets", []))
+
+
 def main() -> int:
     config.ROOT = Path.cwd().resolve()
 
@@ -55,6 +67,7 @@ def main() -> int:
     parser.add_argument("--param", default="", help="query param for probe commands")
     parser.add_argument("--payload", default="", help="payload for probe commands")
     parser.add_argument("--skill", default="xss", help="probe skill type for probe command")
+    parser.add_argument("--technique", default="", help="named technique from catalog (e.g. img_onerror, tautology)")
     args = parser.parse_args()
 
     if not args.command or args.command == "list":
@@ -68,6 +81,7 @@ def main() -> int:
         print(f"unknown command: {cmd}. try: python cli.py list")
         return 1
 
+    _apply_scope(args.target)
     tool_name, _ = COMMANDS[cmd]
     handler = HANDLERS[tool_name]
 
@@ -78,7 +92,12 @@ def main() -> int:
         cfg = SKILL_TYPES.get(skill, SKILL_TYPES["xss"])
         path = args.path or cfg["defaults"]["path"]
         param = args.param or cfg["defaults"]["param"]
-        payload = args.payload or cfg["fallback_payload"]
+        if args.technique:
+            tech = get_technique(skill, args.technique)
+            payload = tech.payload if tech else args.payload
+        else:
+            payload = args.payload
+        payload = payload or cfg["fallback_payload"]
         probe_name = cfg["probe_tool"]
         result = HANDLERS[probe_name](args.target, path, param, payload)
     elif tool_name == "check_auth_flow":

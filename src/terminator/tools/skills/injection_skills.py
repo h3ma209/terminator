@@ -4,6 +4,7 @@ import re
 
 from terminator.tools.http import web_base
 from terminator.tools.probe_http import build_get_url, fetch_get, save_probe
+from terminator.catalog import check_with_variations, default_payload
 
 
 def probe_cmdi(target: str, path: str, param: str, payload: str) -> str:
@@ -43,7 +44,10 @@ def probe_cmdi(target: str, path: str, param: str, payload: str) -> str:
 
 
 def check_cmdi(target: str, payload: str = "", path: str = "", param: str = "") -> str:
-    return probe_cmdi(target, path or "/ping", param or "host", payload or "127.0.0.1;id")
+    return check_with_variations(
+        "cmdi", "command injection check", probe_cmdi,
+        target, path or "/ping", param or "host", payload,
+    )
 
 
 def probe_ssti(target: str, path: str, param: str, payload: str) -> str:
@@ -83,4 +87,7 @@ def probe_ssti(target: str, path: str, param: str, payload: str) -> str:
 
 
 def check_ssti(target: str, payload: str = "", path: str = "", param: str = "") -> str:
-    return probe_ssti(target, path or "/render", param or "template", payload or "{{7*7}}")
+    return check_with_variations(
+        "ssti", "SSTI check", probe_ssti,
+        target, path or "/render", param or "template", payload,
+    )

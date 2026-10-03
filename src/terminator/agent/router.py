@@ -29,6 +29,7 @@ from terminator.tools.skills.passive_skills import (
 )
 from terminator.tools.skills.redirect import check_redirect
 from terminator.pentest.autonomous import run_autonomous_engagement
+from terminator.pentest.takeover import run_takeover_engagement
 from terminator.tools.skills import run_skill_battery
 from terminator.tools.skills.sqli import check_sqli
 from terminator.tools.skills.traversal import check_traversal
@@ -75,6 +76,8 @@ def prefetch_data(text: str) -> tuple[str, str] | None:
         return "fetch_api_routes", fetch_api_routes(url)
     if any(w in lower for w in ("analyze", "priorit", "where to focus", "where to target", "focus area")):
         return "analyze_target", analyze_target(url)
+    if any(w in lower for w in ("takeover", "take over", "pwn", "compromise", "metasploitable")):
+        return "run_takeover_engagement", run_takeover_engagement(url)
     if any(w in lower for w in ("autonomous", "auto engage", "pentest", "full engage")) and not wants_skill_mode(text):
         return "run_autonomous_engagement", run_autonomous_engagement(url)
     if any(w in lower for w in ("skill battery", "all skills", "full skill")) and not wants_skill_mode(text):

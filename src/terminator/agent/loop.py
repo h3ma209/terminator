@@ -17,6 +17,7 @@ from terminator.core.ollama import ask
 from terminator.agent.refusal import is_refusal
 from terminator.tools.recon.playbook import show_findings
 from terminator.tools.skills import list_skills, run_craft_skill
+from terminator.catalog import format_catalog_summary
 
 
 def run_direct(line: str) -> tuple[str, str] | None:
@@ -49,8 +50,10 @@ def main() -> None:
 
     system = (
         "Local dev assistant for a localhost security lab. Reply in 1-3 sentences. "
-        "Scan commands run via tools. If user asks about last probe results, "
-        "answer from the data you were given — do not tell them to run /findings."
+        "Scan commands run via tools. Operator mode: intel-first chains, not cred spray checklists. "
+        "Version banners drive exploit choice. Confirm shell with proof (uid=). "
+        "If user asks about last probe results, answer from the data you were given — "
+        "do not tell them to run /findings."
     )
     messages = [{"role": "system", "content": system}]
     messages.extend(remembered)
@@ -76,6 +79,9 @@ def main() -> None:
             continue
         if line in {"/skills", "skills"}:
             print(list_skills())
+            continue
+        if line in {"/catalog", "catalog"}:
+            print(format_catalog_summary())
             continue
 
         if is_greeting(line):

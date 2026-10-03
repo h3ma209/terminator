@@ -6,7 +6,8 @@ def show_help() -> str:
 
 COMMANDS
   /help       show this help
-  /skills     list all probe + check skills
+  /catalog    every attack technique + injection style
+  /skills     full tool registry + technique catalog
   /findings   show saved session intel
   /clear      wipe chat memory
 
@@ -15,7 +16,9 @@ AUTO-RUN (direct tool output)
   run skill battery on http://127.0.0.1:3000   all skill checks
   check xss / sqli / ssrf / cors / idor / jwt bypass / ...
   check passive suite on http://127.0.0.1:3000
-  craft sqli payload for /user            skill mode (Qwen crafts payload)
+  craft sqli tautology on /user           named technique
+  craft xss all variations on /search     every injection style
+  craft img_onerror xss                   pick technique by name
 
 SKILL GROUPS (probe_* + check_*)
   xss, sqli, redirect, traversal          injection / redirect labs
@@ -32,8 +35,15 @@ CYBORG LAB ENDPOINTS
 CLI
   python cli.py battery http://127.0.0.1:3000
   python cli.py jwt
-  python cli.py probe --skill sqli --payload "' OR '1'='1"
+  python cli.py probe --skill sqli --technique tautology
+  python cli.py probe --skill xss --technique img_onerror
   python cli.py list
+
+TAKEOVER (operator brain — intel chains, not spray)
+  python cli.py takeover http://192.168.1.253
+  python autorun.py --once          # autoconfig mode: takeover
+  vsFTPd backdoor, WebDAV shell+exec, MySQL OUTFILE, DVWA CMDi chain
+  LLM picks next move from ranked intel — one chain at a time
 
 AUTONOMOUS (no chat, no model — pentester brain)
   python autorun.py              recon -> plan skills -> execute -> report

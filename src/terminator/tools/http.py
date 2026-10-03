@@ -1,5 +1,9 @@
-"""Low-level HTTP and localhost network helpers."""
+"""Low-level HTTP and network helpers."""
 
+from __future__ import annotations
+
+import ipaddress
+import os
 import re
 import socket
 import ssl
@@ -18,6 +22,48 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def localhost_only(host: str) -> bool:
     return host in {"127.0.0.1", "localhost", "::1"}
+
+
+_EXTRA_ALLOWED: set[str] = set()
+
+
+def register_allowed_host(host: str) -> None:
+    if host:
+        _EXTRA_ALLOWED.add(host.lower())
+
+
+def sync_allowed_from_targets(targets: list[str]) -> None:
+    for target in targets:
+        try:
+            host, _ = parse_target(target)
+            register_allowed_host(host)
+        except ValueError:
+            continue
+
+
+def _private_ip(host: str) -> bool:
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        return False
+
+
+def allow_lan_enabled() -> bool:
+    env = os.environ.get("TERMINATOR_ALLOW_LAN", "").lower()
+    if env in {"1", "true", "yes"}:
+        return True
+    return bool(getattr(config, "ALLOW_LAN", False))
+
+
+def is_allowed_host(host: str) -> bool:
+    host = host.lower()
+    if localhost_only(host):
+        return True
+    if host in _EXTRA_ALLOWED:
+        return True
+    if allow_lan_enabled() and _private_ip(host):
+        return True
+    return False
 
 
 def parse_target(target: str) -> tuple[str, int | None]:
@@ -103,8 +149,11 @@ def web_base(target: str) -> tuple[str, str] | tuple[None, str]:
         host, hint_port = parse_target(target)
     except ValueError as exc:
         return None, f"error: {exc}"
-    if not localhost_only(host):
-        return None, "blocked: only works on 127.0.0.1 or localhost"
+    if not is_allowed_host(host):
+        return None, (
+            f"blocked: {host} not in scope — set allow_lan in autoconfig.json, "
+            "add to targets, or TERMINATOR_ALLOW_LAN=1 for private LAN IPs"
+        )
     if hint_port and port_open(host, hint_port):
         return f"http://{host}:{hint_port}", ""
     for port in (3000, 8080, 80, 8000, 5000):
@@ -188,12 +237,26 @@ def page_notes(body: str, page_url: str) -> list:
     return notes
 
 
+METASPLOITABLE_PATHS = (
+    "/", "/index.html", "/robots.txt", "/manual/", "/twiki/", "/phpMyAdmin/",
+    "/phpmyadmin/", "/mutillidae/", "/dav/", "/test.php", "/info.php",
+    "/phpinfo.php", "/admin/", "/login.php", "/login/", "/wordpress/",
+    "/dvwa/", "/webdav/", "/status", "/server-status",
+)
+
+
 def paths_to_probe(base: str) -> list[str]:
     paths = {
         "/", "/health", "/profile.html", "/search.html", "/search",
         "/user", "/redirect", "/files", "/fetch", "/ping", "/render", "/echo",
         "/api/login", "/api/profile", "/api/admin", "/api/cors", "/robots.txt",
     }
+    try:
+        host, _ = parse_target(base)
+        if not localhost_only(host):
+            paths.update(METASPLOITABLE_PATHS)
+    except ValueError:
+        pass
     sitemap = fetch_text(base + "/sitemap.xml", 1200)
     for match in re.finditer(r"<loc>https?://[^/]+(/[^<]*)</loc>", sitemap, flags=re.I):
         paths.add(match.group(1))

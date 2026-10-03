@@ -5,6 +5,7 @@ import urllib.request
 
 from terminator.tools.http import web_base
 from terminator.tools.probe_http import build_get_url, fetch_get, save_probe
+from terminator.catalog import all_payloads, check_with_variations, default_payload
 
 EVIL_ORIGIN = "https://evil.example"
 
@@ -52,7 +53,22 @@ def probe_cors(target: str, payload: str = "", path: str = "", param: str = "") 
 
 
 def check_cors(target: str) -> str:
-    return probe_cors(target)
+    base, err = web_base(target)
+    if err:
+        return err
+    probes = []
+    for pl in all_payloads("cors"):
+        probes.append(probe_cors(base, pl, "/api/cors", "Origin"))
+        if "vulnerable: True" in probes[-1]:
+            break
+    vuln = [p for p in probes if "vulnerable: True" in p]
+    lines = ["=== CORS check ===", f"target: {base}", f"styles tried: {len(all_payloads('cors'))}", ""]
+    if vuln:
+        lines.append("LIKELY VULNERABLE:")
+        lines.extend(f"  {l}" for l in vuln[0].splitlines() if l.startswith(("GET", "vulnerable:", "signals:")))
+    else:
+        lines.append("LIKELY VULNERABLE: none")
+    return "\n".join(lines)
 
 
 def probe_ssrf(target: str, path: str, param: str, payload: str) -> str:
@@ -93,7 +109,10 @@ def probe_ssrf(target: str, path: str, param: str, payload: str) -> str:
 
 
 def check_ssrf(target: str, payload: str = "", path: str = "", param: str = "") -> str:
-    return probe_ssrf(target, path or "/fetch", param or "url", payload or "http://127.0.0.1:11434/")
+    return check_with_variations(
+        "ssrf", "SSRF check", probe_ssrf,
+        target, path or "/fetch", param or "url", payload,
+    )
 
 
 def probe_crlf(target: str, path: str, param: str, payload: str) -> str:
@@ -135,4 +154,7 @@ def probe_crlf(target: str, path: str, param: str, payload: str) -> str:
 
 
 def check_crlf(target: str, payload: str = "", path: str = "", param: str = "") -> str:
-    return probe_crlf(target, path or "/echo", param or "msg", payload or "a%0d%0AX-Injected: evil")
+    return check_with_variations(
+        "crlf", "CRLF check", probe_crlf,
+        target, path or "/echo", param or "msg", payload,
+    )

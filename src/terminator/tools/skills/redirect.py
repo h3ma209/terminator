@@ -4,8 +4,9 @@ import re
 
 from terminator.tools.http import paths_to_probe, web_base
 from terminator.tools.probe_http import MAX_PAYLOAD_LEN, build_get_url, fetch_get, save_probe
+from terminator.catalog import all_payloads, default_payload
 
-DEFAULT_PROBE = "https://evil.example/phish"
+DEFAULT_PROBE = default_payload("redirect")
 REDIRECT_PARAMS = ("url", "next", "redirect", "return", "dest", "continue")
 
 
@@ -75,7 +76,7 @@ def check_redirect(target: str, payload: str = "", path: str = "", param: str = 
     if not base:
         return err
 
-    use_payload = payload or DEFAULT_PROBE
+    payload_list = [payload] if payload else all_payloads("redirect")
     targets = []
     if path and param:
         targets = [(path.split("?", 1)[0], param)]
@@ -93,14 +94,17 @@ def check_redirect(target: str, payload: str = "", path: str = "", param: str = 
         if key in seen:
             continue
         seen.add(key)
-        probes.append(probe_redirect(base, tpath, tparam, use_payload))
+        for pl in payload_list:
+            probes.append(probe_redirect(base, tpath, tparam, pl))
+            if "vulnerable: True" in probes[-1]:
+                break
 
     vuln = [p for p in probes if "vulnerable: True" in p]
     lines = [
         "=== open redirect check ===",
         f"base: {base}",
         f"probes: {len(probes)}",
-        f"payload: {use_payload}",
+        f"payload styles: {len(payload_list)}",
         "",
         f"LIKELY VULNERABLE: {len(vuln)}",
     ]

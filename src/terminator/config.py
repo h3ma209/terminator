@@ -28,6 +28,7 @@ LOG_PATH = DATA_DIR / "autorun.log"
 
 # backward compat for code that referenced AGENT_DIR
 AGENT_DIR = PROJECT_ROOT
+ALLOW_LAN = False
 
 AUTO_TOOLS = frozenset({
     "profile_target", "analyze_target", "fetch_api_routes",

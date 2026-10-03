@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from terminator.core.memory import load_findings, now, save_findings
 from terminator.tools.http import paths_to_probe, web_base
+from terminator.catalog import all_payloads
 
 CANARY = "terminatorCANARY7x2"
 XSS_PROBE = "terminator<xsstest7x2>"
@@ -251,7 +252,7 @@ def check_xss(
     if path and param and not targets:
         targets = [(path.split("?", 1)[0] if path.startswith("/") else "/" + path, param)]
 
-    probe_list = custom or [XSS_PROBE]
+    probe_list = custom or all_payloads("xss") or [XSS_PROBE]
     probes = []
     for tpath, tparam in targets:
         for pl in probe_list:

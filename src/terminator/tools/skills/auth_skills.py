@@ -127,7 +127,12 @@ def probe_idor(target: str, path: str, param: str, payload: str) -> str:
 
 
 def check_idor(target: str, payload: str = "", path: str = "", param: str = "") -> str:
-    return probe_idor(target, path or "/user", param or "id", payload or "2")
+    from terminator.catalog import check_with_variations
+
+    return check_with_variations(
+        "idor", "IDOR check", probe_idor,
+        target, path or "/user", param or "id", payload,
+    )
 
 
 def probe_mass_assignment(target: str, payload: str = "", path: str = "", param: str = "") -> str:
