@@ -30,6 +30,11 @@ class Finding:
     state: str = "confirmed"  # tentative|confirmed|duplicate
     technique: str = ""
     cvss_hint: str = ""
+    phase: str = ""  # recon|attack|auth|brain|passive
+    step: int = 0
+    action_id: str = ""
+    triggered_by: str = ""
+    signals: list[str] = field(default_factory=list)
     id: str = ""
 
     def __post_init__(self) -> None:
@@ -62,6 +67,8 @@ def impact_for(category: str, technique: str = "", proof: str = "") -> str:
         "auth_bypass": "Unauthenticated access to protected functionality.",
         "webshell": "Remote code execution via uploaded web shell — full server compromise as web user.",
         "info_disclosure": "Sensitive configuration/path disclosure enables targeted follow-up exploits.",
+        "clickjacking": "UI redress — trick users into clicking hidden actions on a framed page (wire transfers, settings changes).",
+        "security_headers": "Missing baseline headers increase XSS/clickjacking/mime-sniff risk and weaken browser-side defenses.",
     }
     base = impacts.get(category, "Security control bypass with business impact.")
     if "uid=0" in proof or "uid=0" in proof.lower():
@@ -71,6 +78,29 @@ def impact_for(category: str, technique: str = "", proof: str = "") -> str:
     if "admin" in proof.lower() or "secret" in proof.lower():
         base += " Confirmed access to privileged data."
     return base
+
+
+def format_trigger(
+    phase: str,
+    *,
+    step: int = 0,
+    action_id: str = "",
+    technique: str = "",
+    signals: list[str] | None = None,
+    detail: str = "",
+) -> str:
+    parts = [phase]
+    if step:
+        parts.append(f"step {step}")
+    if action_id:
+        parts.append(action_id)
+    if technique:
+        parts.append(technique)
+    if signals:
+        parts.append(f"signals={', '.join(signals[:5])}")
+    if detail:
+        parts.append(detail)
+    return " / ".join(parts)
 
 
 def finding_from_probe(
@@ -85,6 +115,12 @@ def finding_from_probe(
     severity: str,
     output: str = "",
     chain: list[str] | None = None,
+    *,
+    phase: str = "",
+    step: int = 0,
+    action_id: str = "",
+    triggered_by: str = "",
+    signals: list[str] | None = None,
 ) -> Finding:
     repro = [
         f"1. Send {method} to {asset}{path}",
@@ -94,6 +130,14 @@ def finding_from_probe(
     if payload:
         repro.append(f"Payload: {payload[:200]}")
     proof = output[:500]
+    sigs = list(signals or [])
+    trigger = triggered_by or format_trigger(
+        phase or "probe",
+        step=step,
+        action_id=action_id,
+        technique=technique,
+        signals=sigs,
+    )
     return Finding(
         title=f"{category.upper()} — {technique} on {path}",
         severity=severity,
@@ -111,6 +155,11 @@ def finding_from_probe(
         chain=chain or [],
         technique=technique,
         state="confirmed",
+        phase=phase,
+        step=step,
+        action_id=action_id,
+        triggered_by=trigger,
+        signals=sigs,
     )
 
 
@@ -139,6 +188,8 @@ class FindingStore:
                         f"payload={f.get('payload', '')[:80]}",
                     ) if x
                 )
+            sigs = f.get("signals", []) if isinstance(f.get("signals"), list) else []
+            phase = f.get("phase", "")
             finding = finding_from_probe(
                 category=cat,
                 technique=f.get("technique", ""),
@@ -151,7 +202,15 @@ class FindingStore:
                 severity=f.get("severity") or SEVERITY.get(cat, "medium"),
                 output=proof,
                 chain=f.get("chain", []) if isinstance(f.get("chain"), list) else [],
+                phase=phase,
+                step=int(f.get("step") or 0),
+                action_id=f.get("action_id", ""),
+                triggered_by=f.get("triggered_by", ""),
+                signals=sigs,
             )
+            custom_repro = f.get("repro_steps")
+            if isinstance(custom_repro, list) and custom_repro:
+                finding.repro_steps = custom_repro
             if not self.add(finding):
                 finding.state = "duplicate"
 

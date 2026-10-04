@@ -115,16 +115,30 @@ def main() -> int:
         console.banner("takeover", args.target)
         result = handler(args.target, log_fn=console.log)
     elif tool_name == "run_bounty_engagement":
-        from terminator.core.console import Console
+        from terminator.core.console import Console, make_logger
         import json
-        console = Console(color=not args.plain, emoji=not args.plain)
+        config.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        live_log = config.REPORTS_DIR / "bounty-live.log"
+        live_log.write_text("", encoding="utf-8")
+
+        def _append_live(line: str) -> None:
+            with live_log.open("a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+
+        console, log_fn = make_logger(
+            color=not args.plain,
+            emoji=not args.plain,
+            plain_sink=_append_live,
+        )
         console.banner("bounty", args.target)
+        log_fn(f"[bounty] live log → {live_log}")
         scope_cfg = {}
         if config.AUTOCONFIG_PATH.is_file():
             scope_cfg = json.loads(config.AUTOCONFIG_PATH.read_text(encoding="utf-8"))
         result = handler(
             args.target,
-            log_fn=console.log,
+            log_fn=log_fn,
+            console=console,
             scope_cfg=scope_cfg,
             auth=scope_cfg.get("auth"),
         )

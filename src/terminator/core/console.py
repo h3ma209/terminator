@@ -97,6 +97,7 @@ class Console:
     def write(self, text: str, *, plain_file: Callable[[str], None] | None = None) -> None:
         line = text if text.endswith("\n") else text + "\n"
         sys.stdout.buffer.write(line.encode("utf-8", errors="replace"))
+        sys.stdout.flush()
         if plain_file:
             plain_file(strip_ansi(line.rstrip("\n")))
 
@@ -136,6 +137,30 @@ class Console:
 
         for line in msg.splitlines():
             self.write(self._format_log_line(line))
+
+    def stage(self, num: int, total: int, name: str, detail: str = "") -> None:
+        """Prominent stage header — visible even when sub-steps are quiet."""
+        label = f"STAGE {num}/{total}"
+        head = f"[{label}] {name.upper()}"
+        if detail:
+            head = f"{head} — {detail}"
+        self.blank()
+        self.write(self._style_line(f"{'═' * 52}", "cyan"))
+        prefix = "▶ " if self.emoji else "> "
+        self.write(self._style_line(f"{prefix}{head}", "cyan", bold=True))
+        self.write(self._style_line(f"{'═' * 52}", "cyan"))
+        self.blank()
+
+    def stage_done(self, name: str, detail: str = "", *, elapsed_s: float | None = None) -> None:
+        """Mark stage complete with optional timing."""
+        bits = [name]
+        if detail:
+            bits.append(detail)
+        if elapsed_s is not None:
+            bits.append(f"{elapsed_s:.1f}s")
+        icon = "✓ " if self.emoji else "OK "
+        self.write(self._style_line(f"{icon}{' — '.join(bits)}", "green"))
+        self.blank()
 
     def _format_log_line(self, line: str) -> str:
         stripped = line.strip()

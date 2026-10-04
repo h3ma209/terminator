@@ -43,7 +43,9 @@ BOUNTY HUNTER (impact chains + submission export)
   python cli.py bounty http://127.0.0.1:3000
   python autorun.py --once          # autoconfig mode: bounty
   scope-aware, param mining, JWT/IDOR/mass-assignment chains
-  exports data/reports/bounty-submission.md (HackerOne-style)
+  live stage log + reports in data/reports/:
+    bounty-live.log, bounty-dossier.md (retest guide),
+    bounty-submission.md, bounty-findings.json, bounty-full-report.txt
 
 TAKEOVER (operator brain — intel chains, not spray)
   python cli.py takeover http://192.168.1.253

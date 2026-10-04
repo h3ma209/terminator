@@ -148,6 +148,7 @@ def check_http_methods(target: str) -> str:
 def build_passive_findings(data: dict) -> list[dict]:
     """Structured passive findings from saved check results."""
     findings: list[dict] = []
+    target = data.get("target") or "TARGET"
 
     sh = data.get("security_headers") or {}
     missing = sh.get("missing") or []
@@ -163,6 +164,12 @@ def build_passive_findings(data: dict) -> list[dict]:
             "note": f"hardening score {score}/100 — missing {', '.join(missing)}",
             "signals": missing,
             "phase": "passive",
+            "triggered_by": f"passive/check_security_headers — score {score}/100, missing {', '.join(missing[:5])}",
+            "repro_steps": [
+                f"1. curl -sI {target}/",
+                "2. Check response headers for X-Content-Type-Options, CSP, X-Frame-Options, HSTS",
+                f"3. Confirm score {score}/100 — missing: {', '.join(missing)}",
+            ],
         })
 
     ck = data.get("clickjacking") or {}
@@ -175,8 +182,14 @@ def build_passive_findings(data: dict) -> list[dict]:
             "param": "headers",
             "payload": "",
             "note": "missing X-Frame-Options and/or CSP frame-ancestors",
-            "signals": ["clickjacking possible"],
+            "signals": ["clickjacking possible", "missing X-Frame-Options", "missing CSP frame-ancestors"],
             "phase": "passive",
+            "triggered_by": "passive/check_clickjacking — vulnerable: True, missing frame protection headers",
+            "repro_steps": [
+                f"1. curl -sI {target}/",
+                "2. Verify X-Frame-Options and Content-Security-Policy frame-ancestors are absent",
+                "3. Embed target in <iframe> on attacker page — page loads without X-Frame-Options DENY/SAMEORIGIN block",
+            ],
         })
 
     for hit in data.get("leaks") or []:
