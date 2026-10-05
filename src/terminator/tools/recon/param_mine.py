@@ -64,7 +64,8 @@ def mine_links(html: str) -> list[str]:
 
 
 def mine_page(session: HttpSession, base: str, path: str) -> tuple[str, list[Endpoint], list[str]]:
-    url = base.rstrip("/") + path
+    from terminator.tools.http import join_target
+    url = join_target(base, path)
     res = session.get(url)
     if res.status == "blocked":
         return res.body, [], []

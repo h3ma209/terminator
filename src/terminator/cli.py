@@ -14,6 +14,7 @@ from terminator.tools.http import sync_allowed_from_targets
 DEFAULT_TARGET = "http://127.0.0.1:3000"
 
 COMMANDS = {
+    "doctor": ("doctor", "check external tools (curl/nmap/...) + install hints"),
     "playbook": ("run_playbook", "full scan pipeline"),
     "profile": ("profile_target", "ports, headers, robots, sitemap"),
     "analyze": ("analyze_target", "merged intel + focus ranking"),
@@ -79,6 +80,10 @@ def main() -> int:
         return 0
 
     cmd = args.command.lower()
+    if cmd == "doctor":
+        from terminator.core.platform import format_doctor
+        print(format_doctor())
+        return 0
     if cmd not in COMMANDS:
         print(f"unknown command: {cmd}. try: python cli.py list")
         return 1
@@ -170,3 +175,7 @@ def main() -> int:
         import sys
         sys.stdout.buffer.write(out.encode("utf-8", errors="replace") + b"\n")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

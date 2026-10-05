@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from terminator.tools.http import port_open
+from terminator.tools.recon.nmap_scan import scan_host
 from terminator.tools.services.ftp_probe import probe_ftp_anonymous, spray_ftp_creds
 from terminator.tools.services.mysql_probe import probe_mysql_weak
 
@@ -10,8 +10,10 @@ from terminator.tools.services.mysql_probe import probe_mysql_weak
 def run_service_takeover_scan(host: str, creds: list[tuple[str, str]]) -> tuple[str, list[dict]]:
     parts = []
     findings: list[dict] = []
+    scan = scan_host(host, extended=True)
+    open_set = set(scan.open_ports)
 
-    if port_open(host, 21):
+    if 21 in open_set:
         anon = probe_ftp_anonymous(host)
         parts.append(anon)
         if "vulnerable: True" in anon:
@@ -42,7 +44,7 @@ def run_service_takeover_scan(host: str, creds: list[tuple[str, str]]) -> tuple[
                     "foothold": "shell_via_ftp",
                 })
 
-    if port_open(host, 3306):
+    if 3306 in open_set:
         mysql_out = probe_mysql_weak(host, creds)
         parts.append(mysql_out)
         if "vulnerable: True" in mysql_out:
@@ -60,7 +62,7 @@ def run_service_takeover_scan(host: str, creds: list[tuple[str, str]]) -> tuple[
 
     # SSH/Telnet — report open + known creds for manual/script follow-up
     for port, svc in ((22, "ssh"), (23, "telnet")):
-        if port_open(host, port):
+        if port in open_set:
             parts.append(
                 f"=== {svc.upper()} open ===\ntarget: {host}:{port}\n"
                 f"vulnerable: True\nsignals: {svc} open on Metasploitable — try msfadmin:msfadmin\n"

@@ -66,6 +66,26 @@ def is_allowed_host(host: str) -> bool:
     return False
 
 
+def origin_url(base: str) -> str:
+    """scheme://host:port — drop path prefix such as /en."""
+    raw = base.strip()
+    if "://" not in raw:
+        raw = "http://" + raw
+    parsed = urlparse(raw)
+    if not parsed.hostname:
+        return base.rstrip("/")
+    port = f":{parsed.port}" if parsed.port else ""
+    return f"{parsed.scheme}://{parsed.hostname}{port}"
+
+
+def join_target(base: str, path: str) -> str:
+    """Join a site-root path onto the origin, not onto a locale prefix."""
+    path = path.split("?", 1)[0]
+    if not path.startswith("/"):
+        path = "/" + path
+    return origin_url(base) + path
+
+
 def parse_target(target: str) -> tuple[str, int | None]:
     target = target.strip()
     if "://" in target:
@@ -81,10 +101,14 @@ def parse_target(target: str) -> tuple[str, int | None]:
 
 def port_open(host: str, port: int, timeout: float = 0.4) -> bool:
     try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
+        from terminator.tools.recon.nmap_scan import is_port_open
+        return is_port_open(host, port, timeout=timeout)
+    except Exception:
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except OSError:
+            return False
 
 
 def fetch_text(url: str, max_len: int = 1200) -> str:
@@ -154,11 +178,26 @@ def web_base(target: str) -> tuple[str, str] | tuple[None, str]:
             f"blocked: {host} not in scope — set allow_lan in autoconfig.json, "
             "add to targets, or TERMINATOR_ALLOW_LAN=1 for private LAN IPs"
         )
-    if hint_port and port_open(host, hint_port):
-        return f"http://{host}:{hint_port}", ""
-    for port in (3000, 8080, 80, 8000, 5000):
-        if port_open(host, port):
-            return f"http://{host}:{port}", ""
+
+    path_suffix = ""
+    if "://" in target.strip():
+        parsed = urlparse(target.strip())
+        if parsed.path and parsed.path not in {"", "/"}:
+            path_suffix = parsed.path.rstrip("/")
+
+    from terminator.tools.recon.nmap_scan import scan_host
+
+    web_ports = [3000, 8080, 80, 8000, 5000]
+    ports_to_scan = sorted(set(web_ports) | ({hint_port} if hint_port else set()))
+    scan = scan_host(host, ports=ports_to_scan)
+    open_set = set(scan.open_ports)
+
+    if hint_port and hint_port in open_set:
+        return f"http://{host}:{hint_port}{path_suffix}", ""
+
+    for port in web_ports:
+        if port in open_set:
+            return f"http://{host}:{port}{path_suffix}", ""
     return None, f"error: no common web port open on {host}"
 
 
@@ -257,7 +296,7 @@ def paths_to_probe(base: str) -> list[str]:
 
 
 def probe_path(base: str, path: str) -> dict:
-    url = base.rstrip("/") + path
+    url = join_target(base, path)
     req = urllib.request.Request(url, method="GET", headers={"User-Agent": "terminator"})
     try:
         with urllib.request.urlopen(req, timeout=5) as res:
@@ -288,8 +327,8 @@ def probe_path(base: str, path: str) -> dict:
 
 
 def score_probe(probe: dict) -> tuple[int, list[str]]:
-    if probe.get("status") == "error":
-        return 0, ["unreachable"]
+    if probe.get("status") in {"error", 404, 410}:
+        return 0, ["dead"]
     score = 0
     reasons = []
     path = probe.get("path") or ""

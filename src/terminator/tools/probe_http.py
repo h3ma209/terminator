@@ -44,10 +44,8 @@ def fetch_get(url: str, max_len: int = 16000, follow_redirects: bool = True) -> 
 
 
 def build_get_url(base: str, path: str, param: str, value: str) -> str:
-    path = path.split("?", 1)[0]
-    if not path.startswith("/"):
-        path = "/" + path
-    return base.rstrip("/") + path + "?" + urlencode({param: value})
+    from terminator.tools.http import join_target
+    return join_target(base, path) + "?" + urlencode({param: value})
 
 
 def save_probe(skill: str, data: dict) -> None:

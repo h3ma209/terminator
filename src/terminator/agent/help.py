@@ -44,8 +44,9 @@ BOUNTY HUNTER (impact chains + submission export)
   python autorun.py --once          # autoconfig mode: bounty
   scope-aware, param mining, JWT/IDOR/mass-assignment chains
   live stage log + reports in data/reports/:
-    bounty-live.log, bounty-dossier.md (retest guide),
-    bounty-submission.md, bounty-findings.json, bounty-full-report.txt
+    bounty-live.log, bounty-dossier.md, retest.sh, bounty-findings.json
+  env: TERMINATOR_SKIP_BROWSER=1 TERMINATOR_STUB_LLM=1 (offline smoke)
+  env: OLLAMA_HOST=http://host:11434 (deep LLM mode)
 
 TAKEOVER (operator brain — intel chains, not spray)
   python cli.py takeover http://192.168.1.253

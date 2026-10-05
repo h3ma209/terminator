@@ -3,12 +3,12 @@
 import re
 
 from terminator import config
-from terminator.tools.http import fetch_text, request_method, web_base
+from terminator.tools.http import fetch_text, join_target, request_method, web_base
 
 
 def discover_api_paths(base: str) -> list[str]:
     paths = set(config.API_CANDIDATES)
-    robots = fetch_text(base + "/robots.txt", 400)
+    robots = fetch_text(join_target(base, "/robots.txt"), 400)
     for line in robots.splitlines():
         line = line.strip()
         if line.lower().startswith("disallow:"):
@@ -16,7 +16,7 @@ def discover_api_paths(base: str) -> list[str]:
             if "/api" in entry:
                 paths.add(entry.rstrip("/") if entry != "/api/" else "/api")
     for page in ("/", "/profile.html"):
-        text = fetch_text(base + page, 6000)
+        text = fetch_text(join_target(base, page), 6000)
         if text.startswith("error:"):
             continue
         body = text.split("\n", 1)[-1] if text.startswith("status ") else text
@@ -35,7 +35,7 @@ def fetch_api_routes(target: str) -> str:
     lines = [f"base: {base}", f"candidate paths: {len(paths)}", ""]
     found = []
     for path in paths:
-        url = base.rstrip("/") + path
+        url = join_target(base, path)
         get = request_method(url, "GET")
         opt = request_method(url, "OPTIONS")
         post = request_method(url, "POST", b"{}")

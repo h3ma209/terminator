@@ -22,12 +22,12 @@ from terminator.tools.http import (
     http_probe,
     parse_target,
     paths_to_probe,
-    port_open,
     probe_path,
     request_method,
     score_probe,
     web_base,
 )
+from terminator.tools.recon.nmap_scan import scan_host
 from terminator.tools.recon.profile import profile_target
 from terminator.tools.skills import run_skill_battery
 from terminator.tools.skills.xss import check_xss
@@ -35,14 +35,15 @@ from terminator.tools.skills.xss import check_xss
 
 def _collect_snapshot(base: str) -> dict:
     host, _ = parse_target(base)
+    scan = scan_host(host)
     open_ports = []
-    for port in sorted(config.COMMON_PORTS):
-        if port_open(host, port):
-            if port in config.HTTP_PROBE_PORTS:
-                detail, _ = http_probe(host, port)
-            else:
-                detail = "tcp open"
-            open_ports.append({"port": port, "detail": detail})
+    for pinfo in scan.ports:
+        port = pinfo.port
+        if port in config.HTTP_PROBE_PORTS:
+            detail, _ = http_probe(host, port)
+        else:
+            detail = pinfo.detail or "tcp open"
+        open_ports.append({"port": port, "detail": detail, "service": pinfo.service})
     header_req = urllib.request.Request(base + "/", headers={"User-Agent": "terminator"})
     missing_headers = list(config.HEADER_CHECKS)
     try:

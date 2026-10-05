@@ -52,10 +52,23 @@ def _analyze(baseline: dict, injected: dict, payload: str) -> dict:
         if hint in lower and hint not in bbody.lower():
             signals.append(f"response hint: {hint}")
 
-    if len(pbody) > len(bbody) + 40 and payload.lower().replace(" ", "") in pbody.lower().replace(" ", ""):
+    # Payload echo inside a 404/HTML shell is reflection, not SQL.
+    status = injected.get("status")
+    html = "<html" in pbody.lower() or "<script" in pbody.lower()
+    if status in (404, 403, "404", "403") or html:
+        signals = [s for s in signals if s.startswith("error pattern")]
+
+    if (
+        not html
+        and status not in (404, 403, "404", "403")
+        and len(pbody) > len(bbody) + 80
+        and payload.lower().replace(" ", "") in pbody.lower().replace(" ", "")
+    ):
         signals.append("large response delta with payload present")
 
-    vulnerable = bool(signals)
+    vulnerable = any(s.startswith("error pattern") or s in {
+        "extra rows returned", "payload echoed in query field",
+    } or s.startswith("response hint") or s.startswith("status change") for s in signals)
     return {
         "vulnerable": vulnerable,
         "signals": signals,

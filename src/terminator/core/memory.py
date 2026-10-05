@@ -96,3 +96,91 @@ def save_snapshot(data: dict) -> Path:
     path = snapshot_path(name)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return path
+
+
+def _target_key(target: str) -> str:
+    safe = re.sub(r"[^\w.-]", "_", target.replace("://", "_"))
+    return safe[:120]
+
+
+def target_learnings_path(target: str) -> Path:
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return config.DATA_DIR / f"learnings_{_target_key(target)}.json"
+
+
+def load_target_learnings(target: str) -> dict:
+    path = target_learnings_path(target)
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def save_target_learnings(target: str, data: dict) -> None:
+    path = target_learnings_path(target)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def update_target_learnings(
+    target: str,
+    *,
+    framework: str = "",
+    archetype: str = "",
+    dead_families: list[str] | None = None,
+    dead_actions: list[str] | None = None,
+    confirmed_categories: list[str] | None = None,
+    confirmed_chains: list[str] | None = None,
+    endpoints: list[str] | None = None,
+    reflection_hints: list[str] | None = None,
+) -> dict:
+    """Merge per-target memory for smarter repeat runs.
+
+    Learnings are also keyed by archetype so what worked on one PHP lab or one
+    SPA informs the next target of the same class.
+    """
+    data = load_target_learnings(target)
+    data["target"] = target
+    data["updated"] = now()
+    if framework:
+        data["framework"] = framework
+    if archetype:
+        data["archetype"] = archetype
+    if dead_families:
+        prev = set(data.get("dead_families") or [])
+        data["dead_families"] = sorted(prev | set(dead_families))
+    if dead_actions:
+        prev = set(data.get("dead_actions") or [])
+        data["dead_actions"] = sorted(prev | set(dead_actions))
+    if confirmed_categories:
+        prev = set(data.get("confirmed_categories") or [])
+        data["confirmed_categories"] = sorted(prev | set(confirmed_categories))
+    if confirmed_chains:
+        prev = set(data.get("confirmed_chains") or [])
+        data["confirmed_chains"] = sorted(prev | set(confirmed_chains))
+    if endpoints:
+        prev = set(data.get("known_endpoints") or [])
+        data["known_endpoints"] = sorted(prev | set(endpoints))[:200]
+    if reflection_hints and archetype:
+        hints = data.get("reflection_hints") or {}
+        prev = set(hints.get(archetype) or [])
+        hints[archetype] = sorted(prev | set(reflection_hints))[:30]
+        data["reflection_hints"] = hints
+    save_target_learnings(target, data)
+    return data
+
+
+def archetype_for(framework: str = "", markers: list[str] | None = None, is_lab: bool = False) -> str:
+    """Coarse target class so learnings transfer between similar targets."""
+    fw = (framework or "").lower()
+    blob = " ".join(markers or []).lower()
+    if fw in ("nextjs", "react", "angular", "vue"):
+        return "spa"
+    if "php" in fw or "php" in blob or any(m in blob for m in ("dvwa", "phpmyadmin", "wordpress")):
+        return "php_app"
+    if is_lab:
+        return "lab_vm"
+    if any(m in blob for m in ("nmap:", "ssh", "smb", "ftp")):
+        return "service_host"
+    return "generic_web"

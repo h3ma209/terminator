@@ -35,6 +35,7 @@ class Finding:
     action_id: str = ""
     triggered_by: str = ""
     signals: list[str] = field(default_factory=list)
+    confidence: float = 0.0
     id: str = ""
 
     def __post_init__(self) -> None:
@@ -211,6 +212,14 @@ class FindingStore:
             custom_repro = f.get("repro_steps")
             if isinstance(custom_repro, list) and custom_repro:
                 finding.repro_steps = custom_repro
+            if f.get("request_raw"):
+                finding.request_raw = f["request_raw"]
+            if f.get("response_raw"):
+                finding.response_raw = f["response_raw"]
+            if f.get("confidence"):
+                finding.confidence = float(f["confidence"])
+            if f.get("cvss_hint"):
+                finding.cvss_hint = f["cvss_hint"]
             if not self.add(finding):
                 finding.state = "duplicate"
 

@@ -71,7 +71,12 @@ def check_security_headers(target: str) -> str:
     ]
     if "server" in headers:
         lines.append(f"  server leak: {headers['server']}")
-    save_findings({**load_findings(), "target": base, "updated": now(), "security_headers": {"score": score, "missing": missing}})
+    hdr_text = "\n".join(f"{k}: {v}" for k, v in sorted(headers.items())[:20])
+    save_findings({**load_findings(), "target": base, "updated": now(), "security_headers": {
+        "score": score, "missing": missing,
+        "request_raw": f"GET {base}/",
+        "response_raw": hdr_text,
+    }})
     return "\n".join(lines)
 
 
@@ -116,7 +121,12 @@ def check_clickjacking(target: str) -> str:
         f"vulnerable: {vulnerable}",
         f"signals: {', '.join(signals) or 'protected'}",
     ]
-    save_findings({**load_findings(), "target": base, "updated": now(), "clickjacking": {"vulnerable": vulnerable}})
+    hdr_text = "\n".join(f"{k}: {v}" for k, v in sorted(headers.items())[:20])
+    save_findings({**load_findings(), "target": base, "updated": now(), "clickjacking": {
+        "vulnerable": vulnerable, "signals": signals,
+        "request_raw": f"GET {base}/",
+        "response_raw": hdr_text,
+    }})
     return "\n".join(lines)
 
 
@@ -157,7 +167,7 @@ def build_passive_findings(data: dict) -> list[dict]:
         findings.append({
             "category": "security_headers",
             "technique": "header_gaps",
-            "severity": "medium" if score < 70 else "low",
+            "severity": "low" if score < 70 else "info",
             "path": "/",
             "param": "headers",
             "payload": "",
@@ -166,31 +176,47 @@ def build_passive_findings(data: dict) -> list[dict]:
             "phase": "passive",
             "triggered_by": f"passive/check_security_headers — score {score}/100, missing {', '.join(missing[:5])}",
             "repro_steps": [
-                f"1. curl -sI {target}/",
-                "2. Check response headers for X-Content-Type-Options, CSP, X-Frame-Options, HSTS",
-                f"3. Confirm score {score}/100 — missing: {', '.join(missing)}",
+                f"curl -sI {target}/",
+                "Check response headers for X-Content-Type-Options, CSP, X-Frame-Options, HSTS",
+                f"Confirm score {score}/100 — missing: {', '.join(missing)}",
             ],
+            "request_raw": sh.get("request_raw", f"GET {target}/"),
+            "response_raw": sh.get("response_raw", ""),
         })
 
     ck = data.get("clickjacking") or {}
     if ck.get("vulnerable"):
-        findings.append({
-            "category": "clickjacking",
-            "technique": "missing_frame_protection",
-            "severity": "medium",
-            "path": "/",
-            "param": "headers",
-            "payload": "",
-            "note": "missing X-Frame-Options and/or CSP frame-ancestors",
-            "signals": ["clickjacking possible", "missing X-Frame-Options", "missing CSP frame-ancestors"],
-            "phase": "passive",
-            "triggered_by": "passive/check_clickjacking — vulnerable: True, missing frame protection headers",
-            "repro_steps": [
-                f"1. curl -sI {target}/",
-                "2. Verify X-Frame-Options and Content-Security-Policy frame-ancestors are absent",
-                "3. Embed target in <iframe> on attacker page — page loads without X-Frame-Options DENY/SAMEORIGIN block",
-            ],
-        })
+        # Merge into security_headers finding when both present (same root cause)
+        merged = False
+        for f in findings:
+            if f.get("category") == "security_headers":
+                f.setdefault("signals", []).extend([
+                    "clickjacking possible", "missing X-Frame-Options", "missing CSP frame-ancestors",
+                ])
+                f["signals"] = list(dict.fromkeys(f["signals"]))
+                f["note"] += "; clickjacking possible (no frame protection)"
+                f["triggered_by"] += " + check_clickjacking"
+                merged = True
+                break
+        if not merged:
+            findings.append({
+                "category": "clickjacking",
+                "technique": "missing_frame_protection",
+                "severity": "medium",
+                "path": "/",
+                "param": "headers",
+                "payload": "",
+                "note": "missing X-Frame-Options and/or CSP frame-ancestors",
+                "signals": ["clickjacking possible", "missing X-Frame-Options", "missing CSP frame-ancestors"],
+                "phase": "passive",
+                "triggered_by": "passive/check_clickjacking — vulnerable: True, missing frame protection headers",
+                "repro_steps": [
+                    f"curl -sI {target}/",
+                    "Verify X-Frame-Options and Content-Security-Policy frame-ancestors are absent",
+                ],
+                "request_raw": ck.get("request_raw", ""),
+                "response_raw": ck.get("response_raw", ""),
+            })
 
     for hit in data.get("leaks") or []:
         findings.append({

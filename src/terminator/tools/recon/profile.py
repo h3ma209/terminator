@@ -9,9 +9,21 @@ from terminator.tools.http import (
     http_probe,
     is_allowed_host,
     parse_target,
-    port_open,
 )
 from terminator.tools.recon.banners import format_banner, service_banner
+from terminator.tools.recon.nmap_scan import PortInfo, scan_host
+
+
+def _enrich_port_line(host: str, pinfo: PortInfo, scan_method: str) -> str:
+    port = pinfo.port
+    if port in config.HTTP_PROBE_PORTS:
+        detail, _ = http_probe(host, port)
+        return f"  {port}/{pinfo.label()}: {detail}"
+    if scan_method == "nmap" and pinfo.detail:
+        return pinfo.format_line()
+    banner = service_banner(host, port)
+    detail = format_banner(port, banner)
+    return f"  {port}/{pinfo.label()}: {detail}"
 
 
 def profile_target(target: str) -> str:
@@ -25,65 +37,54 @@ def profile_target(target: str) -> str:
         resolved = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)[0][4][0]
     except OSError as exc:
         return f"error: cannot resolve {host}: {exc}"
-    ports = set(config.COMMON_PORTS)
-    if hint_port:
-        ports.add(hint_port)
+
+    ports_to_scan = sorted(set(config.COMMON_PORTS) | ({hint_port} if hint_port else set()))
+    scan = scan_host(host, ports=list(ports_to_scan), extended=False)
+
     lines = [
         f"target: {target}",
         f"host: {host}",
         f"resolved: {resolved}",
         "open ports:",
     ]
-    web_base = None
-    if hint_port and port_open(host, hint_port):
-        web_base = f"http://{host}:{hint_port}"
-    open_count = 0
-    banner_blob = ""
-    for port in sorted(ports):
-        if port_open(host, port):
-            open_count += 1
-            label = config.COMMON_PORTS.get(port, "unknown")
-            if port in config.HTTP_PROBE_PORTS:
-                detail, base = http_probe(host, port)
-                banner_blob += " " + detail
-                if base and not web_base:
-                    web_base = base.rstrip("/")
-            else:
-                banner = service_banner(host, port)
-                detail = format_banner(port, banner)
-                banner_blob += " " + banner
-            lines.append(f"  {port}/{label}: {detail}")
 
-    # Multi-service host — widen scan from discovery (not a target profile)
-    if open_count >= 2:
-        extra = set(config.EXTENDED_PORTS) - ports
-        ports |= extra
-        for port in sorted(extra):
-            if port_open(host, port):
-                open_count += 1
-                label = config.EXTENDED_PORTS.get(port, "unknown")
-                if port in config.HTTP_PROBE_PORTS:
-                    detail, base = http_probe(host, port)
-                    banner_blob += " " + detail
-                    if base and not web_base:
-                        web_base = base.rstrip("/")
-                else:
-                    banner = service_banner(host, port)
-                    detail = format_banner(port, banner)
-                    banner_blob += " " + banner
-                lines.append(f"  {port}/{label}: {detail}")
-    if not open_count:
-        lines.append("  none from the common port list")
-    lines.append(f"scanned {len(ports)} common ports with short tcp connect probes")
-    if web_base:
+    web_base_url = None
+    all_ports: list[PortInfo] = list(scan.ports)
+
+    if len(scan.open_ports) >= 2:
+        ext = scan_host(host, extended=True)
+        seen = {p.port for p in all_ports}
+        for p in ext.ports:
+            if p.port not in seen:
+                all_ports.append(p)
+                seen.add(p.port)
+
+    if not all_ports:
+        lines.append("  none open")
+    else:
+        for pinfo in sorted(all_ports, key=lambda p: p.port):
+            line = _enrich_port_line(host, pinfo, scan.method)
+            lines.append(line)
+            port = pinfo.port
+            if port in config.HTTP_PROBE_PORTS:
+                _, base = http_probe(host, port)
+                if base and not web_base_url:
+                    web_base_url = base.rstrip("/")
+            if hint_port and port == hint_port:
+                web_base_url = web_base_url or f"http://{host}:{hint_port}"
+
+    lines.append(f"scan method: {scan.method}")
+    lines.append(f"scanned {len(ports_to_scan)} ports via {scan.method}")
+
+    if web_base_url:
         lines.extend([
             "",
-            header_report(web_base + "/"),
+            header_report(web_base_url + "/"),
             "",
             "robots.txt:",
-            fetch_text(web_base + "/robots.txt", 800),
+            fetch_text(web_base_url + "/robots.txt", 800),
             "",
             "sitemap.xml:",
-            fetch_text(web_base + "/sitemap.xml", 800),
+            fetch_text(web_base_url + "/sitemap.xml", 800),
         ])
     return "\n".join(lines)
