@@ -7,7 +7,7 @@ MODEL = __import__("os").environ.get(
     "OLLAMA_MODEL", "huihui_ai/qwen2.5-coder-abliterate:14b"
 )
 MAX_STEPS = 8
-LLM_BUDGET_CALLS = int(__import__("os").environ.get("TERMINATOR_LLM_CALLS", "40"))
+LLM_BUDGET_CALLS = int(__import__("os").environ.get("TERMINATOR_LLM_CALLS", "60"))
 LLM_BUDGET_TOKENS = int(__import__("os").environ.get("TERMINATOR_LLM_TOKENS", "80000"))
 SKIP_BROWSER = __import__("os").environ.get("TERMINATOR_SKIP_BROWSER", "").lower() in {"1", "true", "yes"}
 STUB_LLM = __import__("os").environ.get("TERMINATOR_STUB_LLM", "").lower() in {"1", "true", "yes"}

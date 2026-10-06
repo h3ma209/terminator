@@ -38,3 +38,4 @@ desktop.ini
 *.log
 autorun.log
 reports/latest.txt
+.aider*
